@@ -1,0 +1,117 @@
+POS & SALES – BASIC FUNCTIONS (GYM USE CASE)
+🔹 1. Quick Sale (Fast Billing)
+Walk-in customer ya member dono ke liye
+Simple flow:
+Product select
+Qty enter
+Total auto calculate
+Payment done
+
+Use case:
+Protein shake, water bottle, supplements
+
+🔹 2. Member Linked Sale
+Sale ko kisi member ke account se link karna
+Member ko later charge ya history maintain
+
+Example:
+Member ne supplement liya → bill uske account mein add
+
+🔹 3. Multi Item Cart System
+Ek sale mein multiple products add karna
+{
+  "items": [
+    { "product": "Whey Protein", "qty": 1 },
+    { "product": "Water Bottle", "qty": 2 }
+  ]
+}
+🔹 4. Auto Price Calculation
+Qty × price = total
+Discount apply
+Final amount calculate
+🔹 5. Discount System
+Fixed discount (Rs 500)
+Percentage discount (10%)
+🔹 6. Payment Methods
+
+Multiple options:
+
+Cash
+Card
+JazzCash
+Easypaisa
+🔹 7. Paid / Unpaid / Partial Payment
+Paid → full payment
+Partial → kuch amount due
+Unpaid → pura due
+🔹 8. Due Tracking (VERY IMPORTANT)
+Customer ka outstanding balance track karo
+Member ke profile mein show karo
+🔹 9. Receipt Generation
+Sale ke baad receipt generate:
+Date
+Items
+Total
+Payment method
+🔹 10. Inventory Auto Update
+Sale hone par:
+Stock reduce ho jaye
+🔹 11. Low Stock Alert
+Agar stock kam ho:
+Alert show karo
+🔹 12. Daily Sales Summary
+Total sales today
+Cash vs online breakdown
+🔹 13. Sales History
+Har sale ka record:
+Date
+Items
+Amount
+Customer
+🔹 14. Return / Refund System
+Product return
+Amount adjust ya refund
+🔹 15. Barcode / QR Scan (Optional but powerful)
+Product scan → auto add to cart
+📊 IMPORTANT API FUNCTIONS (POS)
+Create Sale
+POST /sales
+Get All Sales
+GET /sales
+Get Single Sale
+GET /sales/:id
+Update Sale
+PUT /sales/:id
+Delete / Cancel Sale
+DELETE /sales/:id
+Get Member Sales
+GET /members/:id/sales
+Sales Summary
+GET /sales/stats/summary
+Low Stock Products
+GET /products/low-stock/list
+🔥 BONUS (SMART FEATURES)
+💡 1. Credit System (Advanced)
+Member ko udhaar par sale
+Later payment collect
+💡 2. Combo Packages
+Bundle sale:
+Protein + Shaker + Bottle
+💡 3. Trainer Commission
+Agar trainer ne product sell karwaya:
+Commission track karo
+💡 4. Expiry Tracking (Supplements)
+Expiry date track karo
+Expired items alert
+💡 5. WhatsApp Receipt
+Receipt direct WhatsApp pe send
+⚡ MINIMUM MUST-HAVE (DON’T SKIP)
+
+Agar tum beginner ho to yeh 6 cheezein zaroor banao:
+
+Add Product
+Create Sale
+Multi-item cart
+Payment (Paid/Partial)
+Stock auto update
+Sales history

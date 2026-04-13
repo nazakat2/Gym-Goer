@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import {
   membersTable, measurementsTable, attendanceTable, employeesTable,
   invoicesTable, suppliersTable, productsTable, salesTable,
+  posOrdersTable, posOrderItemsTable,
   accountsTable, vouchersTable, adminUsersTable, adminNotificationsTable,
   businessSettingsTable,
 } from "@workspace/db";
@@ -625,6 +626,193 @@ router.post("/sales", async (req, res) => {
   // Deduct stock
   await db.update(productsTable).set({ stock: product.stock - quantity }).where(eq(productsTable.id, productId));
   res.status(201).json({ ...sale, productName: product.name, totalAmount });
+});
+
+// ── POS Orders ─────────────────────────────────────────────────────────────
+
+router.get("/pos/products", async (_req, res) => {
+  const rows = await db.select().from(productsTable).where(sql`${productsTable.stock} > 0`).orderBy(productsTable.name);
+  res.json(rows.map(r => ({ ...r, price: parseFloat(r.price as string) })));
+});
+
+router.get("/pos/products/low-stock", async (_req, res) => {
+  const rows = await db.select().from(productsTable).where(sql`${productsTable.stock} <= ${productsTable.lowStockThreshold}`).orderBy(productsTable.stock);
+  res.json(rows.map(r => ({ ...r, price: parseFloat(r.price as string) })));
+});
+
+router.get("/pos/orders", async (req, res) => {
+  const { date, status, memberId } = req.query as Record<string, string>;
+
+  const orders = await db.select({
+    order: posOrdersTable,
+    memberName: membersTable.name,
+  }).from(posOrdersTable)
+    .leftJoin(membersTable, eq(posOrdersTable.memberId, membersTable.id))
+    .orderBy(desc(posOrdersTable.createdAt));
+
+  let filtered = orders;
+  if (date) filtered = filtered.filter(r => r.order.date === date);
+  if (status && status !== "all") filtered = filtered.filter(r => r.order.status === status);
+  if (memberId) filtered = filtered.filter(r => r.order.memberId === parseInt(memberId));
+
+  const orderIds = filtered.map(r => r.order.id);
+  const allItems = orderIds.length > 0
+    ? await db.select().from(posOrderItemsTable).where(sql`${posOrderItemsTable.orderId} = ANY(ARRAY[${sql.raw(orderIds.join(","))}]::int[])`)
+    : [];
+
+  const itemsByOrder = new Map<number, typeof allItems>();
+  allItems.forEach(item => {
+    const list = itemsByOrder.get(item.orderId) || [];
+    list.push(item);
+    itemsByOrder.set(item.orderId, list);
+  });
+
+  res.json(filtered.map(r => ({
+    ...r.order,
+    memberName: r.memberName ?? null,
+    subtotal: parseFloat(r.order.subtotal as string),
+    totalAmount: parseFloat(r.order.totalAmount as string),
+    paidAmount: parseFloat(r.order.paidAmount as string),
+    dueAmount: parseFloat(r.order.dueAmount as string),
+    discount: parseFloat(r.order.discount as string),
+    items: (itemsByOrder.get(r.order.id) || []).map(i => ({
+      ...i,
+      unitPrice: parseFloat(i.unitPrice as string),
+      subtotal: parseFloat(i.subtotal as string),
+    })),
+  })));
+});
+
+router.get("/pos/orders/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const [row] = await db.select({ order: posOrdersTable, memberName: membersTable.name })
+    .from(posOrdersTable)
+    .leftJoin(membersTable, eq(posOrdersTable.memberId, membersTable.id))
+    .where(eq(posOrdersTable.id, id));
+  if (!row) return res.status(404).json({ message: "Order not found" });
+
+  const items = await db.select().from(posOrderItemsTable).where(eq(posOrderItemsTable.orderId, id));
+  res.json({
+    ...row.order,
+    memberName: row.memberName ?? null,
+    subtotal: parseFloat(row.order.subtotal as string),
+    totalAmount: parseFloat(row.order.totalAmount as string),
+    paidAmount: parseFloat(row.order.paidAmount as string),
+    dueAmount: parseFloat(row.order.dueAmount as string),
+    discount: parseFloat(row.order.discount as string),
+    items: items.map(i => ({ ...i, unitPrice: parseFloat(i.unitPrice as string), subtotal: parseFloat(i.subtotal as string) })),
+  });
+});
+
+router.post("/pos/orders", async (req, res) => {
+  const { memberId, customerName, items, discount, discountType, paymentMethod, paidAmount, notes } = req.body;
+
+  if (!items || items.length === 0) return res.status(400).json({ message: "Cart is empty" });
+
+  // Calculate subtotal from items
+  let subtotal = 0;
+  const enrichedItems: { productId: number; productName: string; unitPrice: number; quantity: number; subtotal: number }[] = [];
+
+  for (const item of items) {
+    const [product] = await db.select().from(productsTable).where(eq(productsTable.id, item.productId));
+    if (!product) return res.status(404).json({ message: `Product #${item.productId} not found` });
+    if (product.stock < item.quantity) return res.status(400).json({ message: `Insufficient stock for ${product.name}` });
+    const unitPrice = parseFloat(product.price as string);
+    const lineSubtotal = unitPrice * item.quantity;
+    subtotal += lineSubtotal;
+    enrichedItems.push({ productId: product.id, productName: product.name, unitPrice, quantity: item.quantity, subtotal: lineSubtotal });
+  }
+
+  const discountAmt = discountType === "percent" ? (subtotal * (parseFloat(discount || "0") / 100)) : parseFloat(discount || "0");
+  const totalAmount = Math.max(0, subtotal - discountAmt);
+  const paid = Math.min(parseFloat(paidAmount || String(totalAmount)), totalAmount);
+  const due = totalAmount - paid;
+  const status = due <= 0 ? "paid" : paid === 0 ? "unpaid" : "partial";
+  const date = today();
+
+  const [order] = await db.insert(posOrdersTable).values({
+    memberId: memberId || null,
+    customerName: customerName || null,
+    discount: String(discountAmt.toFixed(2)),
+    discountType: discountType || "fixed",
+    subtotal: String(subtotal.toFixed(2)),
+    totalAmount: String(totalAmount.toFixed(2)),
+    paidAmount: String(paid.toFixed(2)),
+    dueAmount: String(due.toFixed(2)),
+    paymentMethod: paymentMethod || "cash",
+    status,
+    notes: notes || null,
+    date,
+  }).returning();
+
+  // Insert items
+  await db.insert(posOrderItemsTable).values(enrichedItems.map(i => ({
+    orderId: order.id,
+    productId: i.productId,
+    productName: i.productName,
+    unitPrice: String(i.unitPrice.toFixed(2)),
+    quantity: i.quantity,
+    subtotal: String(i.subtotal.toFixed(2)),
+  })));
+
+  // Deduct stock
+  for (const item of enrichedItems) {
+    const [p] = await db.select({ stock: productsTable.stock }).from(productsTable).where(eq(productsTable.id, item.productId));
+    await db.update(productsTable).set({ stock: p.stock - item.quantity }).where(eq(productsTable.id, item.productId));
+  }
+
+  res.status(201).json({ ...order, items: enrichedItems, totalAmount, subtotal, paidAmount: paid, dueAmount: due });
+});
+
+router.put("/pos/orders/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { paidAmount, notes } = req.body;
+  const [existing] = await db.select().from(posOrdersTable).where(eq(posOrdersTable.id, id));
+  if (!existing) return res.status(404).json({ message: "Order not found" });
+
+  const totalAmount = parseFloat(existing.totalAmount as string);
+  const paid = Math.min(parseFloat(paidAmount), totalAmount);
+  const due = totalAmount - paid;
+  const status = due <= 0 ? "paid" : paid === 0 ? "unpaid" : "partial";
+
+  const [updated] = await db.update(posOrdersTable)
+    .set({ paidAmount: String(paid.toFixed(2)), dueAmount: String(due.toFixed(2)), status, notes: notes ?? existing.notes })
+    .where(eq(posOrdersTable.id, id))
+    .returning();
+  res.json(updated);
+});
+
+router.post("/pos/orders/:id/return", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { itemId, returnQty } = req.body;
+  const [item] = await db.select().from(posOrderItemsTable).where(and(eq(posOrderItemsTable.id, itemId), eq(posOrderItemsTable.orderId, id)));
+  if (!item) return res.status(404).json({ message: "Item not found" });
+  const canReturn = item.quantity - item.returned;
+  if (returnQty > canReturn) return res.status(400).json({ message: `Can only return up to ${canReturn} units` });
+  await db.update(posOrderItemsTable).set({ returned: item.returned + returnQty }).where(eq(posOrderItemsTable.id, itemId));
+  if (item.productId) {
+    const [p] = await db.select({ stock: productsTable.stock }).from(productsTable).where(eq(productsTable.id, item.productId));
+    await db.update(productsTable).set({ stock: p.stock + returnQty }).where(eq(productsTable.id, item.productId));
+  }
+  res.json({ message: "Return processed" });
+});
+
+router.get("/pos/summary", async (req, res) => {
+  const { date } = req.query as Record<string, string>;
+  const targetDate = date || today();
+  const orders = await db.select().from(posOrdersTable).where(eq(posOrdersTable.date, targetDate));
+  const total = orders.reduce((s, o) => s + parseFloat(o.totalAmount as string), 0);
+  const paid = orders.reduce((s, o) => s + parseFloat(o.paidAmount as string), 0);
+  const due = orders.reduce((s, o) => s + parseFloat(o.dueAmount as string), 0);
+  const cashTotal = orders.filter(o => o.paymentMethod === "cash").reduce((s, o) => s + parseFloat(o.paidAmount as string), 0);
+  const onlineTotal = paid - cashTotal;
+  const lowStock = await db.select().from(productsTable).where(sql`${productsTable.stock} <= ${productsTable.lowStockThreshold}`);
+  res.json({ date: targetDate, totalSales: orders.length, totalAmount: total, paidAmount: paid, dueAmount: due, cashTotal, onlineTotal, lowStockCount: lowStock.length });
+});
+
+router.get("/pos/members", async (_req, res) => {
+  const members = await db.select({ id: membersTable.id, name: membersTable.name, phone: membersTable.phone }).from(membersTable).where(eq(membersTable.status, "active")).orderBy(membersTable.name);
+  res.json(members);
 });
 
 // ── Suppliers ──────────────────────────────────────────────────────────────

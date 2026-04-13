@@ -13,6 +13,7 @@ import Attendance from "@/pages/attendance";
 import Employees from "@/pages/employees";
 import Billing from "@/pages/billing";
 import Inventory from "@/pages/inventory";
+import Sales from "@/pages/sales";
 import Accounts from "@/pages/accounts";
 import Reports from "@/pages/reports";
 import Notifications from "@/pages/notifications";
@@ -61,10 +62,7 @@ function ProtectedRouter() {
         <Route path="/attendance" component={Attendance} />
         <Route path="/employees" component={Employees} />
         <Route path="/billing" component={Billing} />
-        <Route
-          path="/sales"
-          component={() => <PlaceholderPage title="POS & Sales" />}
-        />
+        <Route path="/sales" component={Sales} />
         <Route path="/inventory" component={Inventory} />
         <Route path="/accounts" component={Accounts} />
         <Route path="/users" component={AdminUsers} />
