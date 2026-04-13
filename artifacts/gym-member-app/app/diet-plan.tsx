@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { DUMMY_DIET_PLANS } from "@/utils/dummyData";
+
+const HERO_DIET = require("../assets/images/hero-diet.png");
 
 export default function DietPlanScreen() {
   const colors = useColors();
@@ -35,27 +37,34 @@ export default function DietPlanScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* Overview */}
-      <Card style={[styles.heroCard, { backgroundColor: colors.primary, borderWidth: 0 }]}>
-        <View style={styles.heroHeader}>
-          <View>
-            <Text style={styles.heroTitle}>{plan.name}</Text>
-            <Text style={styles.heroGoal}>{plan.goal}</Text>
+      {/* Overview Hero */}
+      <ImageBackground
+        source={HERO_DIET}
+        style={styles.heroBanner}
+        imageStyle={styles.heroImage}
+        resizeMode="cover"
+      >
+        <View style={styles.heroOverlay}>
+          <View style={styles.heroHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroTitle}>{plan.name}</Text>
+              <Text style={styles.heroGoal}>{plan.goal}</Text>
+            </View>
+            {plan.isActive && <Badge label="Active" variant="success" />}
           </View>
-          {plan.isActive && <Badge label="Active" variant="success" />}
+          <View style={[styles.calRow, { backgroundColor: "rgba(0,0,0,0.35)", borderRadius: 12 }]}>
+            <Feather name="zap" size={28} color="#FFD700" />
+            <View>
+              <Text style={styles.calValue}>{plan.calories}</Text>
+              <Text style={styles.calLabel}>Daily Calories</Text>
+            </View>
+            <View style={styles.dietitianRow}>
+              <Feather name="user" size={14} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.dietitianText}>{plan.dietitian}</Text>
+            </View>
+          </View>
         </View>
-        <View style={[styles.calRow, { backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 12 }]}>
-          <Feather name="zap" size={28} color="#FFD700" />
-          <View>
-            <Text style={styles.calValue}>{plan.calories}</Text>
-            <Text style={styles.calLabel}>Daily Calories</Text>
-          </View>
-          <View style={[styles.dietitianRow]}>
-            <Feather name="user" size={14} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.dietitianText}>{plan.dietitian}</Text>
-          </View>
-        </View>
-      </Card>
+      </ImageBackground>
 
       {/* Macros */}
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Macronutrients</Text>
@@ -105,7 +114,9 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   topBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   screenTitle: { fontFamily: "Inter_700Bold", fontSize: 18 },
-  heroCard: { padding: 20, marginBottom: 24 },
+  heroBanner: { borderRadius: 16, overflow: "hidden", marginBottom: 24 },
+  heroImage: { borderRadius: 16 },
+  heroOverlay: { backgroundColor: "rgba(0,0,0,0.58)", padding: 20 },
   heroHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
   heroTitle: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 22 },
   heroGoal: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 4 },

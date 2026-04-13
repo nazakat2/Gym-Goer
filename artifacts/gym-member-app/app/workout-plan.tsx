@@ -1,12 +1,15 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+
 import { DUMMY_WORKOUT_PLANS } from "@/utils/dummyData";
+
+const HERO_WORKOUT = require("../assets/images/hero-workout.png");
 
 export default function WorkoutPlanScreen() {
   const colors = useColors();
@@ -52,32 +55,39 @@ export default function WorkoutPlanScreen() {
         ))}
       </ScrollView>
 
-      {/* Plan Overview */}
-      <Card style={[styles.overviewCard, { backgroundColor: colors.primary, borderWidth: 0 }]}>
-        <View style={styles.overviewHeader}>
-          <View>
-            <Text style={styles.planName}>{plan.name}</Text>
-            <Text style={styles.planGoal}>{plan.goal}</Text>
-          </View>
-          {plan.isActive && <Badge label="Active" variant="success" />}
-        </View>
-        <View style={styles.planMeta}>
-          {[
-            { icon: "calendar" as const, label: plan.duration },
-            { icon: "zap" as const, label: `${plan.daysPerWeek}x / week` },
-            { icon: "bar-chart-2" as const, label: plan.level },
-          ].map((m) => (
-            <View key={m.label} style={styles.planMetaItem}>
-              <Feather name={m.icon} size={14} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.planMetaText}>{m.label}</Text>
+      {/* Plan Hero Banner */}
+      <ImageBackground
+        source={HERO_WORKOUT}
+        style={styles.heroCard}
+        imageStyle={styles.heroImage}
+        resizeMode="cover"
+      >
+        <View style={styles.heroOverlay}>
+          <View style={styles.overviewHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.planName}>{plan.name}</Text>
+              <Text style={styles.planGoal}>{plan.goal}</Text>
             </View>
-          ))}
+            {plan.isActive && <Badge label="Active" variant="success" />}
+          </View>
+          <View style={styles.planMeta}>
+            {[
+              { icon: "calendar" as const, label: plan.duration },
+              { icon: "zap" as const, label: `${plan.daysPerWeek}x / week` },
+              { icon: "bar-chart-2" as const, label: plan.level },
+            ].map((m) => (
+              <View key={m.label} style={styles.planMetaItem}>
+                <Feather name={m.icon} size={14} color="rgba(255,255,255,0.8)" />
+                <Text style={styles.planMetaText}>{m.label}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={[styles.trainerRow, { backgroundColor: "rgba(0,0,0,0.35)" }]}>
+            <Feather name="user" size={14} color="rgba(255,255,255,0.9)" />
+            <Text style={styles.trainerText}>Trainer: {plan.trainer}</Text>
+          </View>
         </View>
-        <View style={[styles.trainerRow, { backgroundColor: "rgba(255,255,255,0.15)" }]}>
-          <Feather name="user" size={14} color="rgba(255,255,255,0.9)" />
-          <Text style={styles.trainerText}>Trainer: {plan.trainer}</Text>
-        </View>
-      </Card>
+      </ImageBackground>
 
       {/* Exercises */}
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
@@ -119,7 +129,12 @@ const styles = StyleSheet.create({
   planTab: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, marginRight: 10, borderWidth: 1.5 },
   planTabText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   activeDot: { width: 6, height: 6, borderRadius: 3 },
-  overviewCard: { padding: 20, marginBottom: 24 },
+  heroCard: { borderRadius: 16, overflow: "hidden", marginBottom: 24 },
+  heroImage: { borderRadius: 16 },
+  heroOverlay: {
+    backgroundColor: "rgba(0,0,0,0.55)",
+    padding: 20,
+  },
   overviewHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
   planName: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 22 },
   planGoal: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 4 },

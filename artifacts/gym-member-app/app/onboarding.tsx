@@ -3,6 +3,8 @@ import React, { useRef, useState } from "react";
 import {
   Dimensions,
   FlatList,
+  Image,
+  ImageBackground,
   Platform,
   StyleSheet,
   Text,
@@ -14,11 +16,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { Button } from "@/components/ui/Button";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
+
+const SPLASH_BG = require("../assets/images/splash-bg.png");
+const HERO_WORKOUT = require("../assets/images/hero-workout.png");
+const HERO_DIET = require("../assets/images/hero-diet.png");
 
 const slides = [
   {
     id: "1",
+    image: HERO_WORKOUT,
     icon: "zap" as const,
     title: "Train Smarter",
     description:
@@ -27,6 +34,7 @@ const slides = [
   },
   {
     id: "2",
+    image: null,
     icon: "calendar" as const,
     title: "Book Classes",
     description:
@@ -35,10 +43,11 @@ const slides = [
   },
   {
     id: "3",
-    icon: "trending-up" as const,
-    title: "Track Progress",
+    image: HERO_DIET,
+    icon: "coffee" as const,
+    title: "Eat Right",
     description:
-      "Monitor your transformation with detailed metrics, charts, and milestone achievements.",
+      "Follow expert-crafted diet plans with macro tracking, meal schedules, and nutritionist guidance.",
     color: "#22C55E",
   },
 ];
@@ -62,84 +71,117 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 16 }]}>
-        <TouchableOpacity onPress={() => router.replace("/login")}>
-          <Text style={[styles.skip, { color: colors.mutedForeground }]}>Skip</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        ref={ref}
-        data={slides}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        scrollEnabled={false}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.slide, { width }]}>
-            <View style={[styles.iconContainer, { backgroundColor: item.color + "15" }]}>
-              <View style={[styles.iconInner, { backgroundColor: item.color }]}>
-                <Feather name={item.icon} size={48} color="#FFFFFF" />
-              </View>
-            </View>
-            <Text style={[styles.title, { color: colors.foreground }]}>{item.title}</Text>
-            <Text style={[styles.description, { color: colors.mutedForeground }]}>
-              {item.description}
-            </Text>
-          </View>
-        )}
-      />
-
-      <View style={[styles.footer, { paddingBottom: botPad + 24 }]}>
-        <View style={styles.dots}>
-          {slides.map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.dot,
-                {
-                  backgroundColor: i === current ? colors.primary : colors.border,
-                  width: i === current ? 24 : 8,
-                },
-              ]}
-            />
-          ))}
-        </View>
-        <Button
-          title={current === slides.length - 1 ? "Get Started" : "Next"}
-          onPress={next}
-          size="lg"
-        />
-        {current === slides.length - 1 && (
-          <TouchableOpacity onPress={() => router.replace("/login")} style={{ marginTop: 12 }}>
-            <Text style={[styles.loginLink, { color: colors.mutedForeground }]}>
-              Already have an account?{" "}
-              <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}>
-                Sign In
-              </Text>
-            </Text>
+    <ImageBackground source={SPLASH_BG} style={styles.bgFill} resizeMode="cover">
+      <View style={[styles.overlay, { backgroundColor: "rgba(0,0,0,0.60)" }]} />
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: topPad + 16 }]}>
+          <TouchableOpacity onPress={() => router.replace("/login")}>
+            <Text style={styles.skip}>Skip</Text>
           </TouchableOpacity>
-        )}
+        </View>
+
+        <FlatList
+          ref={ref}
+          data={slides}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEnabled={false}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={[styles.slide, { width }]}>
+              {item.image ? (
+                <View style={styles.heroImageWrapper}>
+                  <Image
+                    source={item.image}
+                    style={styles.heroImage}
+                    resizeMode="cover"
+                  />
+                  <View style={[styles.heroOverlay, { backgroundColor: item.color + "30" }]} />
+                </View>
+              ) : (
+                <View style={[styles.iconContainer, { backgroundColor: item.color + "25" }]}>
+                  <View style={[styles.iconInner, { backgroundColor: item.color }]}>
+                    <Feather name={item.icon} size={48} color="#FFFFFF" />
+                  </View>
+                </View>
+              )}
+              <Text style={styles.title}>{item.title}</Text>
+              <Text style={styles.description}>{item.description}</Text>
+            </View>
+          )}
+        />
+
+        <View style={[styles.footer, { paddingBottom: botPad + 24 }]}>
+          <View style={styles.dots}>
+            {slides.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor: i === current ? "#E31C25" : "rgba(255,255,255,0.4)",
+                    width: i === current ? 24 : 8,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+          <Button
+            title={current === slides.length - 1 ? "Get Started" : "Next"}
+            onPress={next}
+            size="lg"
+          />
+          {current === slides.length - 1 && (
+            <TouchableOpacity onPress={() => router.replace("/login")} style={{ marginTop: 12 }}>
+              <Text style={styles.loginLink}>
+                Already have an account?{" "}
+                <Text style={{ color: "#E31C25", fontFamily: "Inter_600SemiBold" }}>
+                  Sign In
+                </Text>
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  bgFill: { flex: 1, width: "100%", height: "100%" },
+  overlay: { ...StyleSheet.absoluteFillObject },
   container: { flex: 1 },
   header: {
     alignItems: "flex-end",
     paddingHorizontal: 24,
     paddingBottom: 8,
   },
-  skip: { fontFamily: "Inter_500Medium", fontSize: 16 },
+  skip: { fontFamily: "Inter_500Medium", fontSize: 16, color: "rgba(255,255,255,0.75)" },
   slide: {
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 40,
+    paddingHorizontal: 32,
     gap: 24,
+  },
+  heroImageWrapper: {
+    width: Math.min(width * 0.78, 340),
+    height: Math.min(width * 0.78, 340),
+    borderRadius: 24,
+    overflow: "hidden",
+    marginBottom: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   iconContainer: {
     width: 160,
@@ -160,12 +202,14 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     fontSize: 32,
     textAlign: "center",
+    color: "#FFFFFF",
   },
   description: {
     fontFamily: "Inter_400Regular",
-    fontSize: 17,
+    fontSize: 16,
     textAlign: "center",
     lineHeight: 26,
+    color: "rgba(255,255,255,0.80)",
   },
   footer: {
     paddingHorizontal: 24,
@@ -181,5 +225,5 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  loginLink: { fontFamily: "Inter_400Regular", fontSize: 15 },
+  loginLink: { fontFamily: "Inter_400Regular", fontSize: 15, color: "rgba(255,255,255,0.7)" },
 });
