@@ -1,4 +1,5 @@
 import { Router } from "express";
+import nodemailer from "nodemailer";
 import { db } from "@workspace/db";
 import {
   membersTable, measurementsTable, attendanceTable, employeesTable,
@@ -9,6 +10,17 @@ import {
 import { eq, desc, and, like, or, sql, gte, lte, count } from "drizzle-orm";
 
 const router = Router();
+
+// ── Email transporter ──────────────────────────────────────────────────────
+const emailUser = process.env["EMAIL_USER"] || "";
+const emailPass = process.env["EMAIL_PASS"] || "";
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: { user: emailUser, pass: emailPass },
+});
+
+// ── OTP store (in-memory): email → { otp, expiresAt } ─────────────────────
+const otpStore = new Map<string, { otp: string; expiresAt: number }>();
 
 // ── Auth ─────────────────────────────────────────────────────
 router.post("/auth/login", async (req, res) => {
@@ -29,6 +41,81 @@ router.get("/auth/me", async (req, res) => {
   if (!user) return res.status(401).json({ message: "User not found" });
   const { password: _, ...safeUser } = user;
   return res.json(safeUser);
+});
+
+// POST /auth/forgot-password — generate & email OTP
+router.post("/auth/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: "Email is required" });
+
+  const [user] = await db.select().from(adminUsersTable)
+    .where(eq(adminUsersTable.email, email.toLowerCase().trim()));
+  if (!user) return res.status(404).json({ message: "No account found with this email" });
+
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+  otpStore.set(email.toLowerCase(), { otp, expiresAt });
+
+  try {
+    await transporter.sendMail({
+      from: `"GymAdmin" <${emailUser}>`,
+      to: email,
+      subject: "Password Reset OTP — GymAdmin",
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #eee;border-radius:12px;">
+          <h2 style="color:#E31C25;margin-top:0;">Password Reset</h2>
+          <p>Hello <strong>${user.name}</strong>,</p>
+          <p>Use the OTP below to reset your GymAdmin password. It expires in <strong>10 minutes</strong>.</p>
+          <div style="background:#f5f5f5;border-radius:8px;padding:24px;text-align:center;margin:24px 0;">
+            <span style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#E31C25;">${otp}</span>
+          </div>
+          <p style="color:#888;font-size:13px;">If you did not request this, please ignore this email.</p>
+        </div>
+      `,
+    });
+    return res.json({ message: "OTP sent to your email" });
+  } catch (err) {
+    console.error("Email error:", err);
+    return res.status(500).json({ message: "Failed to send email. Check server email config." });
+  }
+});
+
+// POST /auth/verify-otp — check OTP is valid
+router.post("/auth/verify-otp", async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) return res.status(400).json({ message: "Email and OTP are required" });
+
+  const entry = otpStore.get(email.toLowerCase());
+  if (!entry) return res.status(400).json({ message: "No OTP found. Please request a new one." });
+  if (Date.now() > entry.expiresAt) {
+    otpStore.delete(email.toLowerCase());
+    return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+  }
+  if (entry.otp !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
+
+  return res.json({ message: "OTP verified" });
+});
+
+// POST /auth/reset-password — set new password (OTP must still be valid)
+router.post("/auth/reset-password", async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  if (!email || !otp || !newPassword) return res.status(400).json({ message: "All fields are required" });
+  if (newPassword.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
+
+  const entry = otpStore.get(email.toLowerCase());
+  if (!entry) return res.status(400).json({ message: "No OTP found. Please request a new one." });
+  if (Date.now() > entry.expiresAt) {
+    otpStore.delete(email.toLowerCase());
+    return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+  }
+  if (entry.otp !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
+
+  await db.update(adminUsersTable)
+    .set({ password: newPassword })
+    .where(eq(adminUsersTable.email, email.toLowerCase().trim()));
+
+  otpStore.delete(email.toLowerCase());
+  return res.json({ message: "Password reset successful" });
 });
 
 // ── Helpers ──────────────────────────────────────────────────
