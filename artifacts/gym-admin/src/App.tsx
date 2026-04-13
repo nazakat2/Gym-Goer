@@ -61,7 +61,10 @@ function ProtectedRouter() {
         <Route path="/attendance" component={Attendance} />
         <Route path="/employees" component={Employees} />
         <Route path="/billing" component={Billing} />
-        <Route path="/sales" component={() => <PlaceholderPage title="POS & Sales" />} />
+        <Route
+          path="/sales"
+          component={() => <PlaceholderPage title="POS & Sales" />}
+        />
         <Route path="/inventory" component={Inventory} />
         <Route path="/accounts" component={Accounts} />
         <Route path="/users" component={AdminUsers} />

@@ -19,8 +19,6 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,16 +32,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const res = await fetch(`${BASE}/api/auth/login`, {
+    const res = await fetch(`/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
+    let body: Record<string, unknown>;
+    try { body = await res.json(); } catch { body = {}; }
     if (!res.ok) {
-      const { message } = await res.json();
-      throw new Error(message || "Login failed");
+      throw new Error((body.message as string) || "Invalid email or password");
     }
-    const { user: loggedIn } = await res.json();
+    const loggedIn = (body as { user: AdminUser }).user;
     setUser(loggedIn);
     localStorage.setItem("gym_admin_user", JSON.stringify(loggedIn));
   };
