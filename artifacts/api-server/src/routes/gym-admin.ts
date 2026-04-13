@@ -10,6 +10,27 @@ import { eq, desc, and, like, or, sql, gte, lte, count } from "drizzle-orm";
 
 const router = Router();
 
+// ── Auth ─────────────────────────────────────────────────────
+router.post("/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ message: "Email and password required" });
+  const [user] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email.toLowerCase().trim()));
+  if (!user || user.password !== password) return res.status(401).json({ message: "Invalid email or password" });
+  if (user.status !== "active") return res.status(403).json({ message: "Account is inactive" });
+  await db.update(adminUsersTable).set({ lastLogin: new Date().toISOString() }).where(eq(adminUsersTable.id, user.id));
+  const { password: _, ...safeUser } = user;
+  return res.json({ user: safeUser });
+});
+
+router.get("/auth/me", async (req, res) => {
+  const email = req.headers["x-admin-email"] as string;
+  if (!email) return res.status(401).json({ message: "Not authenticated" });
+  const [user] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email));
+  if (!user) return res.status(401).json({ message: "User not found" });
+  const { password: _, ...safeUser } = user;
+  return res.json(safeUser);
+});
+
 // ── Helpers ──────────────────────────────────────────────────
 function calcExpiry(startDate: string, plan: string): string {
   const d = new Date(startDate);

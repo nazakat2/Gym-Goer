@@ -1,23 +1,32 @@
-import { Menu, UserCircle } from "lucide-react";
+import { Menu, Bell, LogOut, User, Settings } from "lucide-react";
+import { Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
   Users,
-  Activity,
   CalendarCheck,
   Briefcase,
   Receipt,
   ShoppingCart,
   Package,
   Wallet,
-  Settings,
   FileBarChart,
-  Bell,
   Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -35,11 +44,21 @@ const navItems = [
   { href: "/business", label: "Business Settings", icon: Settings },
 ];
 
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
 export function Header() {
   const [location] = useLocation();
+  const { user, logout } = useAuth();
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
+    <header className="flex h-14 items-center gap-4 border-b bg-sidebar px-4 lg:h-[60px] lg:px-6">
       <Sheet>
         <SheetTrigger asChild>
           <Button variant="outline" size="icon" className="shrink-0 sm:hidden">
@@ -51,7 +70,7 @@ export function Header() {
           <nav className="grid gap-2 text-lg font-medium">
             <Link href="/" className="flex items-center gap-2 text-lg font-semibold mb-4 text-primary">
               <Activity className="h-6 w-6" />
-              <span className="">GymAdmin</span>
+              <span>GymAdmin</span>
             </Link>
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -73,21 +92,59 @@ export function Header() {
           </nav>
         </SheetContent>
       </Sheet>
-      <div className="w-full flex-1">
-        {/* Breadcrumb or search could go here */}
-      </div>
-      <div className="flex items-center gap-4">
+
+      <div className="w-full flex-1" />
+
+      <div className="flex items-center gap-3">
         <Link href="/notifications">
-          <Button variant="outline" size="icon" className="relative">
+          <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-4 w-4" />
-            <span className="absolute -top-1 -right-1 flex h-3 w-3 rounded-full bg-destructive"></span>
-            <span className="sr-only">Toggle notifications</span>
+            <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 rounded-full bg-destructive border-2 border-sidebar" />
+            <span className="sr-only">Notifications</span>
           </Button>
         </Link>
-        <Button variant="outline" size="icon" className="rounded-full">
-          <UserCircle className="h-5 w-5" />
-          <span className="sr-only">Toggle user menu</span>
-        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-2 rounded-full outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
+              <Avatar className="h-8 w-8 cursor-pointer border-2 border-transparent hover:border-primary transition-colors">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+                  {user ? getInitials(user.name) : "?"}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col gap-1">
+                <p className="font-semibold text-sm leading-none">{user?.name}</p>
+                <p className="text-xs text-muted-foreground leading-none">{user?.email}</p>
+                <Badge variant="outline" className="w-fit mt-1 text-xs capitalize">{user?.role}</Badge>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/users" className="flex items-center gap-2 cursor-pointer">
+                <User className="h-4 w-4" />
+                Admin Users
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/business" className="flex items-center gap-2 cursor-pointer">
+                <Settings className="h-4 w-4" />
+                Business Settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={logout}
+              className="flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
