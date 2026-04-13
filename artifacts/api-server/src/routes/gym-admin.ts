@@ -19,8 +19,9 @@ const transporter = nodemailer.createTransport({
   auth: { user: emailUser, pass: emailPass },
 });
 
-// ── OTP store (in-memory): email → { otp, expiresAt } ─────────────────────
-const otpStore = new Map<string, { otp: string; expiresAt: number }>();
+// ── OTP stores ─────────────────────────────────────────────────────────────
+const otpStore = new Map<string, { otp: string; expiresAt: number }>();           // password reset
+const signupOtpStore = new Map<string, { otp: string; expiresAt: number; name: string; password: string }>(); // signup verify
 
 // ── Auth ─────────────────────────────────────────────────────
 router.post("/auth/login", async (req, res) => {
@@ -116,6 +117,78 @@ router.post("/auth/reset-password", async (req, res) => {
 
   otpStore.delete(email.toLowerCase());
   return res.json({ message: "Password reset successful" });
+});
+
+// POST /auth/send-signup-otp — send email verification OTP for new admin account
+router.post("/auth/send-signup-otp", async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password) return res.status(400).json({ message: "All fields are required" });
+  if (password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
+
+  const emailKey = email.toLowerCase().trim();
+  const [existing] = await db.select({ id: adminUsersTable.id })
+    .from(adminUsersTable).where(eq(adminUsersTable.email, emailKey));
+  if (existing) return res.status(409).json({ message: "An account with this email already exists" });
+
+  if (!emailUser || !emailPass) return res.status(503).json({ message: "Email service not configured" });
+
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  signupOtpStore.set(emailKey, { otp, expiresAt: Date.now() + 10 * 60 * 1000, name: name.trim(), password });
+
+  try {
+    await transporter.sendMail({
+      from: `"GymAdmin" <${emailUser}>`,
+      to: email,
+      subject: "GymAdmin — Verify Your Email",
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #eee;border-radius:12px;">
+          <h2 style="color:#E31C25;margin-top:0;">Verify Your Email</h2>
+          <p>Hi <strong>${name.trim()}</strong>, welcome to GymAdmin!</p>
+          <p>Use this OTP to complete your account registration. It expires in <strong>10 minutes</strong>.</p>
+          <div style="background:#f5f5f5;border-radius:8px;padding:24px;text-align:center;margin:24px 0;">
+            <span style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#E31C25;">${otp}</span>
+          </div>
+          <p style="color:#888;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+        </div>
+      `,
+    });
+    return res.json({ message: "Verification OTP sent to your email" });
+  } catch (err) {
+    console.error("Signup email error:", err);
+    return res.status(500).json({ message: "Failed to send verification email" });
+  }
+});
+
+// POST /auth/register — verify OTP and create new admin account
+router.post("/auth/register", async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) return res.status(400).json({ message: "Email and OTP are required" });
+
+  const emailKey = email.toLowerCase().trim();
+  const entry = signupOtpStore.get(emailKey);
+  if (!entry) return res.status(400).json({ message: "No OTP found. Please request a new one." });
+  if (Date.now() > entry.expiresAt) {
+    signupOtpStore.delete(emailKey);
+    return res.status(400).json({ message: "OTP expired. Please request a new one." });
+  }
+  if (entry.otp !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
+
+  const [existing] = await db.select({ id: adminUsersTable.id })
+    .from(adminUsersTable).where(eq(adminUsersTable.email, emailKey));
+  if (existing) return res.status(409).json({ message: "An account with this email already exists" });
+
+  const [newUser] = await db.insert(adminUsersTable).values({
+    name: entry.name,
+    email: emailKey,
+    password: entry.password,
+    role: "staff",
+    permissions: ["members", "attendance"],
+    status: "active",
+  }).returning();
+
+  signupOtpStore.delete(emailKey);
+  const { password: _, ...safeUser } = newUser;
+  return res.status(201).json({ user: safeUser });
 });
 
 // ── Helpers ──────────────────────────────────────────────────
