@@ -1,5 +1,6 @@
 export * from "./members";
 export * from "./app-content";
+export * from "./otps";
 export * from "./measurements";
 export * from "./attendance";
 export * from "./employees";

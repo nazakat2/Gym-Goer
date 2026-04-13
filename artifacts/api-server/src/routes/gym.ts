@@ -7,8 +7,9 @@ import {
   appWorkoutPlansTable, appWorkoutExercisesTable,
   appDietPlansTable, appDietMealsTable,
   appOnboardingSlidesTable,
+  otpsTable,
 } from "@workspace/db";
-import { eq, asc, desc } from "drizzle-orm";
+import { eq, asc, desc, and } from "drizzle-orm";
 
 const router = Router();
 const SECRET = process.env["SESSION_SECRET"] || "gym_secret_key_2026";
@@ -25,8 +26,6 @@ const transporter = nodemailer.createTransport({
 // ─── In-memory stores ──────────────────────────────────────────────────────
 const userStore = new Map<string, any>();   // userId → user data
 const emailStore = new Map<string, string>(); // email → userId
-const resetCodes = new Map<string, { code: string; expiresAt: number }>(); // email → {code, expiry}
-const signupOtps = new Map<string, { otp: string; expiresAt: number; data: any }>(); // email → {otp, expiry, formData}
 
 function nameFromEmail(email: string): string {
   const local = email.split("@")[0];
@@ -107,7 +106,12 @@ router.post("/auth/send-signup-otp", async (req, res) => {
 
   const otp = String(Math.floor(100000 + Math.random() * 900000));
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-  signupOtps.set(emailKey, { otp, expiresAt, data: { name: name.trim(), email: emailKey, password, phone: phone || "" } });
+  // Store OTP in DB (delete any old ones first)
+  await db.delete(otpsTable).where(and(eq(otpsTable.email, emailKey), eq(otpsTable.type, "signup")));
+  await db.insert(otpsTable).values({
+    email: emailKey, otp, type: "signup", expiresAt,
+    data: JSON.stringify({ name: name.trim(), email: emailKey, password, phone: phone || "" }),
+  });
 
   try {
     await transporter.sendMail({
@@ -142,21 +146,23 @@ router.post("/auth/send-signup-otp", async (req, res) => {
 });
 
 // Step 2: verify OTP and create account
-router.post("/auth/signup", (req, res) => {
+router.post("/auth/signup", async (req, res) => {
   const { name, email, password, phone, otp } = req.body;
   if (!name || !email || !password) return res.status(400).json({ message: "Missing fields" });
   const emailKey = email.trim().toLowerCase();
 
-  // If OTP provided, verify it
+  // If OTP provided, verify it from DB
   if (otp) {
-    const entry = signupOtps.get(emailKey);
+    const [entry] = await db.select().from(otpsTable)
+      .where(and(eq(otpsTable.email, emailKey), eq(otpsTable.type, "signup")))
+      .limit(1);
     if (!entry) return res.status(400).json({ message: "No OTP found. Please request a new one." });
     if (Date.now() > entry.expiresAt) {
-      signupOtps.delete(emailKey);
+      await db.delete(otpsTable).where(eq(otpsTable.id, entry.id));
       return res.status(400).json({ message: "OTP expired. Please request a new one." });
     }
-    if (entry.otp !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
-    signupOtps.delete(emailKey);
+    if (entry.otp !== String(otp)) return res.status(400).json({ message: "Invalid OTP. Please try again." });
+    await db.delete(otpsTable).where(eq(otpsTable.id, entry.id));
   }
 
   if (emailStore.has(emailKey)) {
@@ -181,7 +187,7 @@ router.post("/auth/signup", (req, res) => {
   return res.json({ token, user: safeUser });
 });
 
-router.post("/auth/forgot-password", async (req, res) => {
+router.post("/auth/forgot-password", async (req: any, res: any) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: "Email is required" });
 
@@ -189,9 +195,11 @@ router.post("/auth/forgot-password", async (req, res) => {
     return res.status(503).json({ message: "Email service not configured. Please contact support." });
   }
 
-  // Generate 6-digit OTP, valid for 15 minutes
+  // Generate 6-digit OTP, valid for 15 minutes — persist to DB
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  resetCodes.set(email.toLowerCase(), { code, expiresAt: Date.now() + 15 * 60 * 1000 });
+  const emailKey = email.trim().toLowerCase();
+  await db.delete(otpsTable).where(and(eq(otpsTable.email, emailKey), eq(otpsTable.type, "reset")));
+  await db.insert(otpsTable).values({ email: emailKey, otp: code, type: "reset", expiresAt: Date.now() + 15 * 60 * 1000 });
 
   try {
     await transporter.sendMail({
@@ -228,22 +236,33 @@ router.post("/auth/forgot-password", async (req, res) => {
   }
 });
 
-router.post("/auth/verify-reset-code", (req, res) => {
+router.post("/auth/verify-reset-code", async (req, res) => {
   const { email, code } = req.body;
-  const record = resetCodes.get(email?.toLowerCase());
-  if (!record || record.code !== code || Date.now() > record.expiresAt) {
-    return res.status(400).json({ message: "Invalid or expired code" });
+  if (!email || !code) return res.status(400).json({ message: "Email and code required" });
+  const emailKey = email.trim().toLowerCase();
+  const [record] = await db.select().from(otpsTable)
+    .where(and(eq(otpsTable.email, emailKey), eq(otpsTable.type, "reset")))
+    .limit(1);
+  if (!record) return res.status(400).json({ message: "Invalid or expired code" });
+  if (Date.now() > record.expiresAt) {
+    await db.delete(otpsTable).where(eq(otpsTable.id, record.id));
+    return res.status(400).json({ message: "Code expired. Please request a new one." });
   }
+  if (record.otp !== String(code)) return res.status(400).json({ message: "Invalid or expired code" });
   return res.json({ message: "Code verified" });
 });
 
-router.post("/auth/reset-password", (req, res) => {
+router.post("/auth/reset-password", async (req, res) => {
   const { email, code, newPassword } = req.body;
-  const record = resetCodes.get(email?.toLowerCase());
-  if (!record || record.code !== code || Date.now() > record.expiresAt) {
+  if (!email || !code) return res.status(400).json({ message: "Email and code required" });
+  const emailKey = email.trim().toLowerCase();
+  const [record] = await db.select().from(otpsTable)
+    .where(and(eq(otpsTable.email, emailKey), eq(otpsTable.type, "reset")))
+    .limit(1);
+  if (!record || record.otp !== String(code) || Date.now() > record.expiresAt) {
     return res.status(400).json({ message: "Invalid or expired code" });
   }
-  resetCodes.delete(email.toLowerCase());
+  await db.delete(otpsTable).where(eq(otpsTable.id, record.id));
   return res.json({ message: "Password reset successful" });
 });
 

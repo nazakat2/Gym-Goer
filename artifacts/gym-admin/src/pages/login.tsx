@@ -97,7 +97,7 @@ export default function Login() {
     if (suPassword !== suConfirm) { setError("Passwords do not match"); return; }
     setError(""); setLoading(true);
     try {
-      await apiFetch("/api/auth/send-signup-otp", { name: suName, email: suEmail, password: suPassword, role: suRole });
+      await apiFetch("/api/admin/auth/send-signup-otp", { name: suName, email: suEmail, password: suPassword, role: suRole });
       resetOtp(); setStep("signup-otp"); startCooldown();
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); }
@@ -109,7 +109,7 @@ export default function Login() {
     if (getOtp().length < OTP_LEN) { setError("Enter all 6 digits"); return; }
     setError(""); setLoading(true);
     try {
-      const data = await apiFetch("/api/auth/register", { email: suEmail, otp: getOtp() });
+      const data = await apiFetch("/api/admin/auth/register", { email: suEmail, otp: getOtp() });
       const u = (data as any).user;
       setSuSuccess({ name: u?.name || suName, email: u?.email || suEmail, role: u?.role || suRole });
       setStep("signup-success");
@@ -121,7 +121,7 @@ export default function Login() {
     if (resendCooldown > 0) return;
     setLoading(true); setError("");
     try {
-      await apiFetch("/api/auth/send-signup-otp", { name: suName, email: suEmail, password: suPassword });
+      await apiFetch("/api/admin/auth/send-signup-otp", { name: suName, email: suEmail, password: suPassword });
       resetOtp(); otpRefs.current[0]?.focus(); startCooldown();
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); }
@@ -133,7 +133,7 @@ export default function Login() {
     if (!fpEmail) { setError("Email is required"); return; }
     setError(""); setLoading(true);
     try {
-      await apiFetch("/api/auth/forgot-password", { email: fpEmail });
+      await apiFetch("/api/admin/auth/forgot-password", { email: fpEmail });
       resetOtp(); setStep("forgot-otp");
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); }
@@ -148,7 +148,7 @@ export default function Login() {
     if (fpNewPassword !== fpConfirm) { setError("Passwords do not match"); return; }
     setError(""); setLoading(true);
     try {
-      await apiFetch("/api/auth/reset-password", { email: fpEmail, otp: getOtp(), newPassword: fpNewPassword });
+      await apiFetch("/api/admin/auth/reset-password", { email: fpEmail, otp: getOtp(), newPassword: fpNewPassword });
       setStep("forgot-success");
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); }
@@ -461,7 +461,7 @@ export default function Login() {
                 </Button>
                 <ResendRow onResend={async () => {
                   setLoading(true); setError("");
-                  try { await apiFetch("/api/auth/forgot-password", { email: fpEmail }); resetOtp(); otpRefs.current[0]?.focus(); }
+                  try { await apiFetch("/api/admin/auth/forgot-password", { email: fpEmail }); resetOtp(); otpRefs.current[0]?.focus(); }
                   catch (err: any) { setError(err.message); }
                   finally { setLoading(false); }
                 }} />

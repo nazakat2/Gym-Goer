@@ -11,6 +11,7 @@ import {
   appDietPlansTable, appDietMealsTable, appOnboardingSlidesTable,
 } from "@workspace/db";
 import { eq, desc, asc, and, like, or, sql, gte, lte, count } from "drizzle-orm";
+import { otpsTable } from "@workspace/db";
 
 const router = Router();
 
@@ -22,12 +23,8 @@ const transporter = nodemailer.createTransport({
   auth: { user: emailUser, pass: emailPass },
 });
 
-// ── OTP stores ─────────────────────────────────────────────────────────────
-const otpStore = new Map<string, { otp: string; expiresAt: number }>();           // password reset
-const signupOtpStore = new Map<string, { otp: string; expiresAt: number; name: string; password: string; role: string }>(); // signup verify
-
-// ── Auth ─────────────────────────────────────────────────────
-router.post("/auth/login", async (req, res) => {
+// ── Admin Auth ────────────────────────────────────────────────────────────
+router.post("/admin/auth/login", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ message: "Email and password required" });
   const [user] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email.toLowerCase().trim()));
@@ -38,7 +35,7 @@ router.post("/auth/login", async (req, res) => {
   return res.json({ user: safeUser });
 });
 
-router.get("/auth/me", async (req, res) => {
+router.get("/admin/auth/me", async (req, res) => {
   const email = req.headers["x-admin-email"] as string;
   if (!email) return res.status(401).json({ message: "Not authenticated" });
   const [user] = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email));
@@ -47,8 +44,8 @@ router.get("/auth/me", async (req, res) => {
   return res.json(safeUser);
 });
 
-// POST /auth/forgot-password — generate & email OTP
-router.post("/auth/forgot-password", async (req, res) => {
+// POST /admin/auth/forgot-password — generate & email OTP
+router.post("/admin/auth/forgot-password", async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: "Email is required" });
 
@@ -58,7 +55,9 @@ router.post("/auth/forgot-password", async (req, res) => {
 
   const otp = String(Math.floor(100000 + Math.random() * 900000));
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-  otpStore.set(email.toLowerCase(), { otp, expiresAt });
+  const emailKey = email.toLowerCase().trim();
+  await db.delete(otpsTable).where(and(eq(otpsTable.email, emailKey), eq(otpsTable.type, "admin-reset")));
+  await db.insert(otpsTable).values({ email: emailKey, otp, type: "admin-reset", expiresAt });
 
   try {
     await transporter.sendMail({
@@ -84,46 +83,43 @@ router.post("/auth/forgot-password", async (req, res) => {
   }
 });
 
-// POST /auth/verify-otp — check OTP is valid
-router.post("/auth/verify-otp", async (req, res) => {
+// POST /admin/auth/verify-otp — check OTP is valid
+router.post("/admin/auth/verify-otp", async (req, res) => {
   const { email, otp } = req.body;
   if (!email || !otp) return res.status(400).json({ message: "Email and OTP are required" });
-
-  const entry = otpStore.get(email.toLowerCase());
+  const emailKey = email.toLowerCase().trim();
+  const [entry] = await db.select().from(otpsTable)
+    .where(and(eq(otpsTable.email, emailKey), eq(otpsTable.type, "admin-reset"))).limit(1);
   if (!entry) return res.status(400).json({ message: "No OTP found. Please request a new one." });
   if (Date.now() > entry.expiresAt) {
-    otpStore.delete(email.toLowerCase());
+    await db.delete(otpsTable).where(eq(otpsTable.id, entry.id));
     return res.status(400).json({ message: "OTP has expired. Please request a new one." });
   }
   if (entry.otp !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
-
   return res.json({ message: "OTP verified" });
 });
 
-// POST /auth/reset-password — set new password (OTP must still be valid)
-router.post("/auth/reset-password", async (req, res) => {
+// POST /admin/auth/reset-password — set new password (OTP must still be valid)
+router.post("/admin/auth/reset-password", async (req, res) => {
   const { email, otp, newPassword } = req.body;
   if (!email || !otp || !newPassword) return res.status(400).json({ message: "All fields are required" });
   if (newPassword.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
-
-  const entry = otpStore.get(email.toLowerCase());
+  const emailKey = email.toLowerCase().trim();
+  const [entry] = await db.select().from(otpsTable)
+    .where(and(eq(otpsTable.email, emailKey), eq(otpsTable.type, "admin-reset"))).limit(1);
   if (!entry) return res.status(400).json({ message: "No OTP found. Please request a new one." });
   if (Date.now() > entry.expiresAt) {
-    otpStore.delete(email.toLowerCase());
+    await db.delete(otpsTable).where(eq(otpsTable.id, entry.id));
     return res.status(400).json({ message: "OTP has expired. Please request a new one." });
   }
   if (entry.otp !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
-
-  await db.update(adminUsersTable)
-    .set({ password: newPassword })
-    .where(eq(adminUsersTable.email, email.toLowerCase().trim()));
-
-  otpStore.delete(email.toLowerCase());
+  await db.update(adminUsersTable).set({ password: newPassword }).where(eq(adminUsersTable.email, emailKey));
+  await db.delete(otpsTable).where(eq(otpsTable.id, entry.id));
   return res.json({ message: "Password reset successful" });
 });
 
-// POST /auth/send-signup-otp — send email verification OTP for new admin account
-router.post("/auth/send-signup-otp", async (req, res) => {
+// POST /admin/auth/send-signup-otp — send email verification OTP for new admin account
+router.post("/admin/auth/send-signup-otp", async (req, res) => {
   const { name, email, password, role } = req.body;
   if (!name || !email || !password) return res.status(400).json({ message: "All fields are required" });
   if (password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
@@ -137,7 +133,11 @@ router.post("/auth/send-signup-otp", async (req, res) => {
 
   const validRole = role === "admin" ? "admin" : "staff";
   const otp = String(Math.floor(100000 + Math.random() * 900000));
-  signupOtpStore.set(emailKey, { otp, expiresAt: Date.now() + 10 * 60 * 1000, name: name.trim(), password, role: validRole });
+  await db.delete(otpsTable).where(and(eq(otpsTable.email, emailKey), eq(otpsTable.type, "admin-signup")));
+  await db.insert(otpsTable).values({
+    email: emailKey, otp, type: "admin-signup", expiresAt: Date.now() + 10 * 60 * 1000,
+    data: JSON.stringify({ name: name.trim(), password, role: validRole }),
+  });
 
   try {
     await transporter.sendMail({
@@ -163,38 +163,41 @@ router.post("/auth/send-signup-otp", async (req, res) => {
   }
 });
 
-// POST /auth/register — verify OTP and create new admin account
-router.post("/auth/register", async (req, res) => {
+// POST /admin/auth/register — verify OTP and create new admin account
+router.post("/admin/auth/register", async (req, res) => {
   const { email, otp } = req.body;
   if (!email || !otp) return res.status(400).json({ message: "Email and OTP are required" });
 
   const emailKey = email.toLowerCase().trim();
-  const entry = signupOtpStore.get(emailKey);
+  const [entry] = await db.select().from(otpsTable)
+    .where(and(eq(otpsTable.email, emailKey), eq(otpsTable.type, "admin-signup"))).limit(1);
   if (!entry) return res.status(400).json({ message: "No OTP found. Please request a new one." });
   if (Date.now() > entry.expiresAt) {
-    signupOtpStore.delete(emailKey);
+    await db.delete(otpsTable).where(eq(otpsTable.id, entry.id));
     return res.status(400).json({ message: "OTP expired. Please request a new one." });
   }
   if (entry.otp !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
+
+  const stored = entry.data ? JSON.parse(entry.data) : {};
 
   const [existing] = await db.select({ id: adminUsersTable.id })
     .from(adminUsersTable).where(eq(adminUsersTable.email, emailKey));
   if (existing) return res.status(409).json({ message: "An account with this email already exists" });
 
-  const defaultPermissions = entry.role === "admin"
+  const defaultPermissions = stored.role === "admin"
     ? ["members", "measurements", "attendance", "employees", "billing", "pos", "inventory", "accounts", "reports", "admin-users", "notifications", "settings"]
     : ["members", "attendance"];
 
   const [newUser] = await db.insert(adminUsersTable).values({
-    name: entry.name,
+    name: stored.name || "",
     email: emailKey,
-    password: entry.password,
-    role: entry.role,
+    password: stored.password || "",
+    role: stored.role || "staff",
     permissions: defaultPermissions,
     status: "active",
   }).returning();
 
-  signupOtpStore.delete(emailKey);
+  await db.delete(otpsTable).where(eq(otpsTable.id, entry.id));
   const { password: _, ...safeUser } = newUser;
   return res.status(201).json({ user: safeUser });
 });
