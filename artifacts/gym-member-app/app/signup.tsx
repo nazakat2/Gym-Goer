@@ -1,20 +1,28 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+
+const TERMS = `Terms of Service\n\nLast updated: January 1, 2026\n\n1. ACCEPTANCE OF TERMS\nBy using GymFit, you agree to these Terms of Service. If you don't agree, please don't use the app.\n\n2. MEMBERSHIP\nMembership plans are billed monthly or annually as selected. Cancellations take effect at the end of the billing period.\n\n3. USE OF FACILITIES\nMembers must follow gym rules and respect other members. Misuse may result in membership termination.\n\n4. HEALTH & SAFETY\nConsult a doctor before starting a new fitness program. GymFit is not liable for injuries resulting from exercise.\n\n5. PERSONAL DATA\nWe collect and process your data as described in our Privacy Policy.\n\n6. INTELLECTUAL PROPERTY\nAll content in the app is owned by GymFit and protected by copyright.\n\n7. LIMITATION OF LIABILITY\nGymFit's liability is limited to the amount paid for your membership in the last 3 months.\n\n8. CHANGES TO TERMS\nWe may update these terms. You will be notified of significant changes.\n\n9. CONTACT\nFor questions, contact support@gymfit.com`;
+
+const PRIVACY = `Privacy Policy\n\nLast updated: January 1, 2026\n\n1. DATA WE COLLECT\n• Name, email, phone number\n• Fitness goals and health data\n• Attendance and workout history\n• Payment information (processed securely)\n• Device and usage data\n\n2. HOW WE USE YOUR DATA\n• To manage your membership and bookings\n• To personalize workout and diet recommendations\n• To send notifications you've opted in to\n• To improve our services\n\n3. DATA SHARING\nWe do not sell your personal data. We may share data with:\n• Payment processors\n• Assigned trainers\n• Legal authorities if required\n\n4. DATA SECURITY\nAll data is encrypted in transit and at rest. We follow industry best practices.\n\n5. YOUR RIGHTS\n• Access your data at any time\n• Request data deletion\n• Export your data\n• Opt-out of marketing\n\n6. COOKIES\nThe app uses minimal local storage for session management only.\n\n7. CONTACT\nPrivacy questions: privacy@gymfit.com`;
+
+type ModalType = "terms" | "privacy" | null;
 
 export default function SignupScreen() {
   const colors = useColors();
@@ -27,6 +35,7 @@ export default function SignupScreen() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [activeModal, setActiveModal] = useState<ModalType>(null);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -51,7 +60,6 @@ export default function SignupScreen() {
       await signup(name.trim(), email.trim().toLowerCase(), password, phone.trim());
       router.replace("/(tabs)/home");
     } catch (err: any) {
-      // Demo fallback
       try {
         const demoUser = {
           id: "u_" + Date.now(), name: name.trim(), email: email.trim(),
@@ -66,12 +74,16 @@ export default function SignupScreen() {
         apiService.setToken(demoToken);
         router.replace("/(tabs)/home");
       } catch {
-        Alert.alert("Sign Up Failed", err.message || "Please try again");
+        setErrors({ name: err.message || "Sign up failed. Please try again." });
       }
     } finally {
       setLoading(false);
     }
   };
+
+  const modalContent = activeModal === "terms" ? TERMS : PRIVACY;
+  const modalTitle = activeModal === "terms" ? "Terms of Service" : "Privacy Policy";
+  const modalIcon = activeModal === "terms" ? "file-text" : "shield";
 
   return (
     <KeyboardAvoidingView
@@ -104,13 +116,77 @@ export default function SignupScreen() {
 
           <Button title="Create Account" onPress={handleSignup} loading={loading} size="lg" style={{ marginTop: 8 }} />
 
+          {/* Terms & Privacy — both tappable */}
           <Text style={[styles.terms, { color: colors.mutedForeground }]}>
             By signing up, you agree to our{" "}
-            <Text style={{ color: colors.primary }}>Terms of Service</Text> and{" "}
-            <Text style={{ color: colors.primary }}>Privacy Policy</Text>
+            <Text
+              style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}
+              onPress={() => setActiveModal("terms")}
+            >
+              Terms of Service
+            </Text>
+            {" "}and{" "}
+            <Text
+              style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}
+              onPress={() => setActiveModal("privacy")}
+            >
+              Privacy Policy
+            </Text>
           </Text>
         </View>
       </ScrollView>
+
+      {/* Terms / Privacy Modal */}
+      <Modal visible={!!activeModal} transparent animationType="slide">
+        <TouchableWithoutFeedback onPress={() => setActiveModal(null)}>
+          <View style={styles.backdrop} />
+        </TouchableWithoutFeedback>
+        <View style={[styles.sheet, { backgroundColor: colors.card }]}>
+          {/* Header */}
+          <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
+            <View style={[styles.sheetIconWrap, { backgroundColor: colors.primary + "18" }]}>
+              <Feather name={modalIcon as any} size={20} color={colors.primary} />
+            </View>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>{modalTitle}</Text>
+            <TouchableOpacity onPress={() => setActiveModal(null)} style={styles.closeBtn}>
+              <Feather name="x" size={22} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Scrollable content */}
+          <ScrollView
+            style={styles.sheetBody}
+            contentContainerStyle={{ paddingBottom: 24 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {modalContent.split("\n\n").map((para, i) => {
+              const isHeading = para.startsWith(modalTitle) || /^\d+\./.test(para);
+              return (
+                <Text
+                  key={i}
+                  style={[
+                    isHeading ? styles.paraHeading : styles.paraBody,
+                    { color: isHeading ? colors.foreground : colors.mutedForeground },
+                    i > 0 && { marginTop: 14 },
+                  ]}
+                >
+                  {para}
+                </Text>
+              );
+            })}
+          </ScrollView>
+
+          {/* Close button */}
+          <View style={[styles.sheetFooter, { borderTopColor: colors.border }]}>
+            <TouchableOpacity
+              onPress={() => setActiveModal(null)}
+              style={[styles.closeFullBtn, { backgroundColor: colors.primary }]}
+            >
+              <Text style={styles.closeFullBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -122,5 +198,58 @@ const styles = StyleSheet.create({
   title: { fontFamily: "Inter_700Bold", fontSize: 28, marginBottom: 8 },
   subtitle: { fontFamily: "Inter_400Regular", fontSize: 15, marginBottom: 28, lineHeight: 22 },
   form: {},
-  terms: { fontFamily: "Inter_400Regular", fontSize: 13, textAlign: "center", marginTop: 16, lineHeight: 20 },
+  terms: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 16,
+    lineHeight: 22,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "82%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 24,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 20,
+    borderBottomWidth: 1,
+  },
+  sheetIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetTitle: { fontFamily: "Inter_700Bold", fontSize: 17, flex: 1 },
+  closeBtn: { padding: 4 },
+  sheetBody: { paddingHorizontal: 20, paddingTop: 16 },
+  paraHeading: { fontFamily: "Inter_700Bold", fontSize: 14 },
+  paraBody: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 22 },
+  sheetFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  closeFullBtn: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  closeFullBtnText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#FFF" },
 });
