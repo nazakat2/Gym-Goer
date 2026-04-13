@@ -1,0 +1,26 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "8zD82vP9T6F6jAALjet9X"
+uri = "file://artifacts/gym-member-app/assets/images/icon.png"
+type = "image"
+title = "gym app icon"
+
+[[generated]]
+id = "BzQRx6DVx5JKVL3rX2fHi"
+uri = "file://artifacts/gym-member-app/assets/images/splash-bg.png"
+type = "image"
+title = "gym splash screen"
+
+[[generated]]
+id = "Ngf-t14uZqifbSBH5XPrr"
+uri = "file://artifacts/gym-member-app/assets/images/hero-workout.png"
+type = "image"
+title = "workout hero"
+
+[[generated]]
+id = "uEx5XP2lcrI30v0I1_QZG"
+uri = "file://artifacts/gym-member-app/assets/images/hero-diet.png"
+type = "image"
+title = "diet hero"
