@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -43,7 +43,14 @@ externalPort = 3000
 localPort = 21520
 externalPort = 3002
 
+[[ports]]
+localPort = 24486
+externalPort = 5000
+
 [userenv]
 
 [userenv.shared]
 EMAIL_USER = "mrsarimofficial@gmail.com"
+
+[nix]
+channel = "stable-25_05"
