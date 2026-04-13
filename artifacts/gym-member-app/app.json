@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "GymFit",
-    "slug": "gym-member-app",
+    "name": "Corex",
+    "slug": "corex",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "gym-member-app",
+    "scheme": "corex",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -14,9 +14,12 @@
       "backgroundColor": "#0D0D0D"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.corex.app"
     },
-    "android": {},
+    "android": {
+      "package": "com.corex.app"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
