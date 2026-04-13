@@ -1,12 +1,23 @@
 import { Router } from "express";
 import jwt from "jsonwebtoken";
+import nodemailer from "nodemailer";
 
 const router = Router();
 const SECRET = process.env["SESSION_SECRET"] || "gym_secret_key_2026";
 
+// ─── Email transporter ─────────────────────────────────────────────────────
+const emailUser = process.env["EMAIL_USER"] || "";
+const emailPass = process.env["EMAIL_PASS"] || "";
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: { user: emailUser, pass: emailPass },
+});
+
 // ─── In-memory stores ──────────────────────────────────────────────────────
 const userStore = new Map<string, any>();   // userId → user data
 const emailStore = new Map<string, string>(); // email → userId
+const resetCodes = new Map<string, { code: string; expiresAt: number }>(); // email → {code, expiry}
 
 function nameFromEmail(email: string): string {
   const local = email.split("@")[0];
@@ -93,8 +104,70 @@ router.post("/auth/signup", (req, res) => {
   return res.json({ token, user: safeUser });
 });
 
-router.post("/auth/forgot-password", (req, res) => {
-  return res.json({ message: "Reset email sent" });
+router.post("/auth/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: "Email is required" });
+
+  if (!emailUser || !emailPass) {
+    return res.status(503).json({ message: "Email service not configured. Please contact support." });
+  }
+
+  // Generate 6-digit OTP, valid for 15 minutes
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  resetCodes.set(email.toLowerCase(), { code, expiresAt: Date.now() + 15 * 60 * 1000 });
+
+  try {
+    await transporter.sendMail({
+      from: `"GymFit App" <${emailUser}>`,
+      to: email,
+      subject: "GymFit — Your Password Reset Code",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; background: #0D0D0D; color: #fff; border-radius: 16px; overflow: hidden;">
+          <div style="background: #E31C25; padding: 32px; text-align: center;">
+            <h1 style="margin: 0; font-size: 28px; color: #fff;">GymFit</h1>
+            <p style="margin: 8px 0 0; color: rgba(255,255,255,0.8); font-size: 14px;">Password Reset Request</p>
+          </div>
+          <div style="padding: 32px; text-align: center;">
+            <p style="color: rgba(255,255,255,0.75); font-size: 15px; margin: 0 0 24px;">
+              Use the code below to reset your password. This code expires in <strong style="color:#E31C25;">15 minutes</strong>.
+            </p>
+            <div style="background: #1A1A1A; border: 2px solid #E31C25; border-radius: 12px; padding: 24px; display: inline-block; margin: 0 auto;">
+              <span style="font-size: 40px; font-weight: bold; letter-spacing: 12px; color: #E31C25;">${code}</span>
+            </div>
+            <p style="color: rgba(255,255,255,0.5); font-size: 13px; margin: 24px 0 0;">
+              If you didn't request this, you can safely ignore this email.
+            </p>
+          </div>
+          <div style="background: #1A1A1A; padding: 16px; text-align: center;">
+            <p style="color: rgba(255,255,255,0.4); font-size: 12px; margin: 0;">GymFit &mdash; Your Fitness Partner</p>
+          </div>
+        </div>
+      `,
+    });
+    return res.json({ message: "Reset code sent to your email" });
+  } catch (err: any) {
+    console.error("Email send error:", err.message);
+    return res.status(500).json({ message: "Failed to send email. Check credentials or try again." });
+  }
+});
+
+router.post("/auth/verify-reset-code", (req, res) => {
+  const { email, code } = req.body;
+  const record = resetCodes.get(email?.toLowerCase());
+  if (!record || record.code !== code || Date.now() > record.expiresAt) {
+    return res.status(400).json({ message: "Invalid or expired code" });
+  }
+  return res.json({ message: "Code verified" });
+});
+
+router.post("/auth/reset-password", (req, res) => {
+  const { email, code, newPassword } = req.body;
+  const record = resetCodes.get(email?.toLowerCase());
+  if (!record || record.code !== code || Date.now() > record.expiresAt) {
+    return res.status(400).json({ message: "Invalid or expired code" });
+  }
+  resetCodes.delete(email.toLowerCase());
+  return res.json({ message: "Password reset successful" });
 });
 
 // ─── Profile ───────────────────────────────────────────────────────────────

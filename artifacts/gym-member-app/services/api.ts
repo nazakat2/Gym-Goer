@@ -47,6 +47,14 @@ class ApiService {
     return this.request("/auth/forgot-password", "POST", { email });
   }
 
+  async verifyResetCode(email: string, code: string) {
+    return this.request("/auth/verify-reset-code", "POST", { email, code });
+  }
+
+  async resetPassword(email: string, code: string, newPassword: string) {
+    return this.request("/auth/reset-password", "POST", { email, code, newPassword });
+  }
+
   // Profile
   async getProfile() {
     return this.request<any>("/profile");
