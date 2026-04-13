@@ -28,6 +28,7 @@ type ModalType =
   | "contact"
   | "terms"
   | "privacy"
+  | "delete-account"
   | null;
 
 export default function SettingsScreen() {
@@ -108,31 +109,13 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteAccount = () => {
-    if (Platform.OS === "web") {
-      const confirmed = window.confirm(
-        "Are you sure you want to permanently delete your account? This action cannot be undone."
-      );
-      if (confirmed) {
-        logout();
-        router.replace("/login");
-      }
-      return;
-    }
-    Alert.alert(
-      "Delete Account",
-      "Are you sure you want to permanently delete your account? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            await logout();
-            router.replace("/login");
-          },
-        },
-      ]
-    );
+    openModal("delete-account");
+  };
+
+  const confirmDeleteAccount = async () => {
+    closeModal();
+    await logout();
+    router.replace("/login");
   };
 
   const FAQs = [
@@ -462,6 +445,43 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
+      {/* ── DELETE ACCOUNT MODAL ── */}
+      <Modal visible={activeModal === "delete-account"} transparent animationType="fade">
+        <TouchableWithoutFeedback onPress={closeModal}>
+          <View style={styles.overlay} />
+        </TouchableWithoutFeedback>
+        <View style={styles.deleteModalWrap}>
+          <View style={[styles.deleteModal, { backgroundColor: colors.card }]}>
+            {/* Icon */}
+            <View style={[styles.deleteIconCircle, { backgroundColor: colors.destructive + "18" }]}>
+              <Feather name="trash-2" size={32} color={colors.destructive} />
+            </View>
+
+            <Text style={[styles.deleteTitle, { color: colors.foreground }]}>Delete Account</Text>
+            <Text style={[styles.deleteSubtitle, { color: colors.mutedForeground }]}>
+              This will permanently delete your account and all associated data — workouts, progress, bookings and payment history.{"\n\n"}This action{" "}
+              <Text style={{ color: colors.destructive, fontFamily: "Inter_700Bold" }}>cannot be undone</Text>.
+            </Text>
+
+            {/* Divider */}
+            <View style={[styles.deleteDivider, { backgroundColor: colors.border }]} />
+
+            {/* Buttons */}
+            <TouchableOpacity
+              onPress={confirmDeleteAccount}
+              style={[styles.deleteConfirmBtn, { backgroundColor: colors.destructive }]}
+            >
+              <Feather name="trash-2" size={16} color="#FFF" style={{ marginRight: 8 }} />
+              <Text style={styles.deleteConfirmBtnText}>Yes, Delete My Account</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={closeModal} style={[styles.deleteCancelBtn, { borderColor: colors.border }]}>
+              <Text style={[styles.deleteCancelBtnText, { color: colors.foreground }]}>Keep My Account</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── TOAST ── */}
       {toastVisible && (
         <Animated.View
@@ -537,4 +557,15 @@ const styles = StyleSheet.create({
   toast: { position: "absolute", bottom: 40, left: 16, right: 16, zIndex: 999 },
   toastInner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#1A7A4A", borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18 },
   toastText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: "#FFF", flex: 1 },
+
+  deleteModalWrap: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
+  deleteModal: { width: "100%", borderRadius: 24, padding: 28, alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 24, elevation: 20 },
+  deleteIconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", marginBottom: 20 },
+  deleteTitle: { fontFamily: "Inter_700Bold", fontSize: 22, marginBottom: 12, textAlign: "center" },
+  deleteSubtitle: { fontFamily: "Inter_400Regular", fontSize: 14, lineHeight: 22, textAlign: "center", marginBottom: 4 },
+  deleteDivider: { width: "100%", height: 1, marginVertical: 20 },
+  deleteConfirmBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", width: "100%", borderRadius: 14, paddingVertical: 15, marginBottom: 10 },
+  deleteConfirmBtnText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#FFF" },
+  deleteCancelBtn: { width: "100%", borderRadius: 14, paddingVertical: 14, alignItems: "center", borderWidth: 1.5 },
+  deleteCancelBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 16 },
 });
