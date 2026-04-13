@@ -153,6 +153,10 @@ class ApiService {
   async sendMessage(trainerId: string, message: string) {
     return this.request("/messages", "POST", { trainerId, message });
   }
+
+  async contactSupport(name: string, message: string) {
+    return this.request("/support/contact", "POST", { name, message });
+  }
 }
 
 export const apiService = new ApiService();

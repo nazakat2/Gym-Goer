@@ -89,13 +89,22 @@ export default function SettingsScreen() {
     }, 1200);
   };
 
-  const handleContactSubmit = () => {
+  const handleContactSubmit = async () => {
     if (!contactName.trim() || !contactMsg.trim()) return;
     setContactLoading(true);
-    setTimeout(() => {
-      setContactLoading(false);
+    try {
+      const { apiService } = await import("@/services/api");
+      await apiService.contactSupport(contactName.trim(), contactMsg.trim());
       setContactSent(true);
-    }, 1200);
+    } catch (err: any) {
+      if (Platform.OS === "web") {
+        window.alert("Failed to send message. Please try again.");
+      } else {
+        Alert.alert("Error", err.message || "Failed to send message. Please try again.");
+      }
+    } finally {
+      setContactLoading(false);
+    }
   };
 
   const handleDeleteAccount = () => {

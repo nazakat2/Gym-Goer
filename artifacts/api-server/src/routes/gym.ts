@@ -306,4 +306,41 @@ router.post("/messages", auth, (req, res) => {
   return res.json({ id: "m_" + Date.now(), from: "user", ...req.body });
 });
 
+// ─── Contact Support ────────────────────────────────────────────────────────
+router.post("/support/contact", async (req, res) => {
+  const { name, message } = req.body;
+  if (!name || !message) return res.status(400).json({ message: "Name and message are required" });
+
+  if (!emailUser || !emailPass) {
+    return res.status(503).json({ message: "Email service not configured" });
+  }
+
+  try {
+    await transporter.sendMail({
+      from: `"GymFit Support" <${emailUser}>`,
+      to: emailUser,
+      subject: `GymFit Support Request from ${name}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;padding:24px;border-radius:12px;">
+          <div style="background:#E31C25;padding:20px 24px;border-radius:8px 8px 0 0;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:22px;">GymFit Support Request</h1>
+          </div>
+          <div style="background:#fff;padding:24px;border-radius:0 0 8px 8px;border:1px solid #eee;">
+            <p style="margin:0 0 8px;color:#555;font-size:14px;text-transform:uppercase;letter-spacing:1px;">From</p>
+            <p style="margin:0 0 20px;font-size:18px;font-weight:bold;color:#111;">${name}</p>
+            <p style="margin:0 0 8px;color:#555;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Message</p>
+            <p style="margin:0;font-size:16px;color:#333;line-height:1.6;background:#f5f5f5;padding:16px;border-radius:6px;white-space:pre-wrap;">${message}</p>
+            <hr style="margin:24px 0;border:none;border-top:1px solid #eee;">
+            <p style="margin:0;color:#999;font-size:12px;text-align:center;">Sent from GymFit Mobile App • ${new Date().toLocaleString()}</p>
+          </div>
+        </div>
+      `,
+    });
+    return res.json({ message: "Support message sent successfully" });
+  } catch (err: any) {
+    console.error("Support email error:", err.message);
+    return res.status(500).json({ message: "Failed to send message. Please try again." });
+  }
+});
+
 export default router;
