@@ -1,0 +1,159 @@
+STEP 2: Member Management
+
+Prompt:
+Build Member Management module:
+
+Add/Edit/Delete member
+Fields:
+Name
+Phone
+CNIC
+Photo upload
+Address
+Membership Plans:
+Monthly / Quarterly / Yearly
+Auto expiry date calculation
+Show Active / Expired members
+
+UI:
+
+Member list screen
+Add member form
+Profile detail screen
+🔹 STEP 3: Fitness Measurements
+
+Prompt:
+Create Fitness Tracking module:
+
+Store:
+Weight
+Height
+BMI
+Body Fat %
+History tracking
+Graph chart (progress over time)
+
+UI:
+
+Add measurement screen
+Progress chart screen
+🔹 STEP 4: Attendance System
+
+Prompt:
+Develop Attendance system:
+
+QR code check-in OR manual check-in
+Daily attendance logs
+Show:
+Today’s attendance
+Monthly stats
+Peak hours chart
+🔹 STEP 5: Employee & Trainer Management
+
+Prompt:
+Build Employee module:
+
+Add/Edit/Delete trainers
+Assign members to trainer
+Track:
+Salary
+Commission
+
+UI:
+
+Trainer list
+Assigned members screen
+🔹 STEP 6: Billing & Fee Collection
+
+Prompt:
+Create Billing system:
+
+Auto fee calculation based on plan
+Payment status:
+Paid / Unpaid
+Generate invoice
+Track dues
+
+Include:
+
+JazzCash / Easypaisa integration (mock or real API)
+🔹 STEP 7: Sales & POS
+
+Prompt:
+Develop POS system:
+
+Add products (supplements etc.)
+Inventory management
+Sales:
+Paid / Unpaid
+Generate receipt
+🔹 STEP 8: Inventory & Suppliers
+
+Prompt:
+Build Inventory module:
+
+Add items
+Track stock
+Supplier management:
+Name
+Contact
+Low stock alerts
+🔹 STEP 9: Accounts & Voucher
+
+Prompt:
+Create Accounts system:
+
+Chart of accounts
+Voucher entry:
+Income
+Expense
+Daily transaction logs
+🔹 STEP 10: User Roles & Permissions
+
+Prompt:
+Implement Role-based access:
+
+Admin
+Staff
+Trainer
+
+Permissions:
+
+View / Edit / Delete control
+🔹 STEP 11: Dashboard
+
+Prompt:
+Create Dashboard screen:
+
+Total members
+Active vs inactive
+Monthly revenue
+Attendance stats
+Graphs
+🔹 STEP 12: Reports (20+)
+
+Prompt:
+Generate Reports:
+
+Financial report
+Attendance report
+Member report
+Trainer performance
+Export PDF
+🔹 STEP 13: Notifications
+
+Prompt:
+Add Notifications:
+
+Membership expiry alert
+Payment reminder
+Push notifications
+🔹 STEP 14: Business Info
+
+Prompt:
+Create Business Settings:
+
+Gym name
+Address
+Contact info
+Logo upload
