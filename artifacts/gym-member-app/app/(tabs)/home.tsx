@@ -77,7 +77,7 @@ export default function HomeScreen() {
             )}
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push("/(tabs)/profile")}>
-            <Avatar name={user?.name || "Member"} size={44} />
+            <Avatar name={user?.name || "Member"} uri={user?.avatar} size={44} />
           </TouchableOpacity>
         </View>
       </View>

@@ -51,7 +51,7 @@ export default function ProfileScreen() {
       {/* Profile Card */}
       <Card style={styles.profileCard}>
         <View style={styles.profileRow}>
-          <Avatar name={user?.name || "Member"} size={72} />
+          <Avatar name={user?.name || "Member"} uri={user?.avatar} size={72} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.profileName, { color: colors.foreground }]}>{user?.name || "Alex Johnson"}</Text>
             <Text style={[styles.profileEmail, { color: colors.mutedForeground }]}>{user?.email}</Text>
