@@ -61,6 +61,8 @@ function ClassicTabLayout() {
           ) : null,
       }}
     >
+      {/* Hide the redirect index from the tab bar */}
+      <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen
         name="home"
         options={{
