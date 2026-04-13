@@ -39,8 +39,12 @@ class ApiService {
     return this.request<{ token: string; user: any }>("/auth/login", "POST", { email, password });
   }
 
-  async signup(name: string, email: string, password: string, phone: string) {
-    return this.request<{ token: string; user: any }>("/auth/signup", "POST", { name, email, password, phone });
+  async sendSignupOtp(name: string, email: string, password: string, phone: string) {
+    return this.request("/auth/send-signup-otp", "POST", { name, email, password, phone });
+  }
+
+  async signup(name: string, email: string, password: string, phone: string, otp?: string) {
+    return this.request<{ token: string; user: any }>("/auth/signup", "POST", { name, email, password, phone, otp });
   }
 
   async forgotPassword(email: string) {

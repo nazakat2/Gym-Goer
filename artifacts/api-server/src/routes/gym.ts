@@ -18,6 +18,7 @@ const transporter = nodemailer.createTransport({
 const userStore = new Map<string, any>();   // userId → user data
 const emailStore = new Map<string, string>(); // email → userId
 const resetCodes = new Map<string, { code: string; expiresAt: number }>(); // email → {code, expiry}
+const signupOtps = new Map<string, { otp: string; expiresAt: number; data: any }>(); // email → {otp, expiry, formData}
 
 function nameFromEmail(email: string): string {
   const local = email.split("@")[0];
@@ -82,10 +83,78 @@ router.post("/auth/login", (req, res) => {
   return res.json({ token, user: { ...safeUser, hasAvatar: !!avatar } });
 });
 
-router.post("/auth/signup", (req, res) => {
+// Step 1: send OTP to email before account creation
+router.post("/auth/send-signup-otp", async (req, res) => {
   const { name, email, password, phone } = req.body;
   if (!name || !email || !password) return res.status(400).json({ message: "Missing fields" });
+
   const emailKey = email.trim().toLowerCase();
+  if (emailStore.has(emailKey)) {
+    return res.status(409).json({ message: "An account with this email already exists" });
+  }
+
+  if (!emailUser || !emailPass) {
+    return res.status(503).json({ message: "Email service not configured" });
+  }
+
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+  signupOtps.set(emailKey, { otp, expiresAt, data: { name: name.trim(), email: emailKey, password, phone: phone || "" } });
+
+  try {
+    await transporter.sendMail({
+      from: `"GymFit App" <${emailUser}>`,
+      to: email,
+      subject: "GymFit — Verify Your Email",
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0D0D0D;color:#fff;border-radius:16px;overflow:hidden;">
+          <div style="background:#E31C25;padding:32px;text-align:center;">
+            <h1 style="margin:0;font-size:28px;color:#fff;">GymFit</h1>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Email Verification</p>
+          </div>
+          <div style="padding:32px;text-align:center;">
+            <p style="color:rgba(255,255,255,0.75);font-size:15px;margin:0 0 8px;">Hi <strong style="color:#fff;">${name.trim()}</strong>, welcome to GymFit!</p>
+            <p style="color:rgba(255,255,255,0.65);font-size:14px;margin:0 0 24px;">Use this OTP to verify your email and complete signup. It expires in <strong style="color:#E31C25;">10 minutes</strong>.</p>
+            <div style="background:#1A1A1A;border:2px solid #E31C25;border-radius:12px;padding:24px;display:inline-block;">
+              <span style="font-size:40px;font-weight:bold;letter-spacing:12px;color:#E31C25;">${otp}</span>
+            </div>
+            <p style="color:rgba(255,255,255,0.4);font-size:13px;margin:24px 0 0;">If you didn't request this, ignore this email.</p>
+          </div>
+          <div style="background:#1A1A1A;padding:16px;text-align:center;">
+            <p style="color:rgba(255,255,255,0.4);font-size:12px;margin:0;">GymFit &mdash; Your Fitness Partner</p>
+          </div>
+        </div>
+      `,
+    });
+    return res.json({ message: "OTP sent to your email" });
+  } catch (err: any) {
+    console.error("Signup OTP email error:", err.message);
+    return res.status(500).json({ message: "Failed to send verification email" });
+  }
+});
+
+// Step 2: verify OTP and create account
+router.post("/auth/signup", (req, res) => {
+  const { name, email, password, phone, otp } = req.body;
+  if (!name || !email || !password) return res.status(400).json({ message: "Missing fields" });
+  const emailKey = email.trim().toLowerCase();
+
+  // If OTP provided, verify it
+  if (otp) {
+    const entry = signupOtps.get(emailKey);
+    if (!entry) return res.status(400).json({ message: "No OTP found. Please request a new one." });
+    if (Date.now() > entry.expiresAt) {
+      signupOtps.delete(emailKey);
+      return res.status(400).json({ message: "OTP expired. Please request a new one." });
+    }
+    if (entry.otp !== String(otp)) return res.status(400).json({ message: "Invalid OTP" });
+    signupOtps.delete(emailKey);
+  }
+
+  if (emailStore.has(emailKey)) {
+    return res.status(409).json({ message: "An account with this email already exists" });
+  }
+
   const id = "u_" + Date.now();
   const user = {
     id,

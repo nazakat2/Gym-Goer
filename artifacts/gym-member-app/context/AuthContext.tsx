@@ -28,7 +28,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, password: string, phone: string) => Promise<void>;
+  signup: (name: string, email: string, password: string, phone: string, otp?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -121,8 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(newUser);
   }, []);
 
-  const signup = useCallback(async (name: string, email: string, password: string, phone: string) => {
-    const response = await apiService.signup(name, email, password, phone);
+  const signup = useCallback(async (name: string, email: string, password: string, phone: string, otp?: string) => {
+    const response = await apiService.signup(name, email, password, phone, otp);
     const { token: newToken, user: newUser } = response;
     await AsyncStorage.setItem("auth_token", newToken);
     await AsyncStorage.setItem("auth_user", JSON.stringify(newUser));
