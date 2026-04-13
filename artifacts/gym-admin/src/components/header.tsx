@@ -28,6 +28,10 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 
+const GymLogo = () => (
+  <img src="/gym-admin/images/logo.png" alt="Core X" className="h-9 w-9 object-contain" />
+);
+
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/members", label: "Members", icon: Users },
@@ -69,8 +73,8 @@ export function Header() {
         <SheetContent side="left" className="flex w-72 flex-col">
           <nav className="grid gap-2 text-lg font-medium">
             <Link href="/" className="flex items-center gap-2 text-lg font-semibold mb-4 text-primary">
-              <Activity className="h-6 w-6" />
-              <span>GymAdmin</span>
+              <GymLogo />
+              <span>Core X</span>
             </Link>
             {navItems.map((item) => {
               const Icon = item.icon;

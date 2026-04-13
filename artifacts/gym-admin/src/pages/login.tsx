@@ -157,11 +157,9 @@ export default function Login() {
   // ── Shared components ──────────────────────────────────────────────────────
   const Logo = () => (
     <div className="flex flex-col items-center gap-3">
-      <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary shadow-lg">
-        <Activity className="h-8 w-8 text-white" />
-      </div>
+      <img src="/gym-admin/images/logo.png" alt="Core X" className="h-24 w-24 object-contain" />
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-foreground">GymAdmin</h1>
+        <h1 className="text-2xl font-bold text-foreground">Core X</h1>
         <p className="text-sm text-muted-foreground">Gym Management System</p>
       </div>
     </div>

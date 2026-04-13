@@ -16,6 +16,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const GymLogo = () => (
+  <img src="/gym-admin/images/logo.png" alt="Core X" className="h-9 w-9 object-contain" />
+);
+
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/members", label: "Members", icon: Users },
@@ -39,8 +43,8 @@ export function Sidebar() {
     <aside className="fixed inset-y-0 left-0 z-10 hidden w-64 flex-col border-r bg-sidebar sm:flex">
       <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
         <Link href="/" className="flex items-center gap-2 font-semibold text-primary">
-          <Activity className="h-6 w-6" />
-          <span className="">GymAdmin</span>
+          <GymLogo />
+          <span className="">Core X</span>
         </Link>
       </div>
       <div className="flex-1 overflow-auto py-2">

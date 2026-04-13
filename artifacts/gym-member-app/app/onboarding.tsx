@@ -21,6 +21,8 @@ const { width, height } = Dimensions.get("window");
 const SPLASH_BG = require("../assets/images/splash-bg.png");
 const HERO_WORKOUT = require("../assets/images/hero-workout.png");
 const HERO_DIET = require("../assets/images/hero-diet.png");
+const HERO_CLASSES = require("../assets/images/hero-classes.jpg");
+const LOGO = require("../assets/images/logo.png");
 
 const slides = [
   {
@@ -34,7 +36,7 @@ const slides = [
   },
   {
     id: "2",
-    image: SPLASH_BG,
+    image: HERO_CLASSES,
     icon: "calendar" as const,
     title: "Book Classes",
     description:
@@ -75,6 +77,7 @@ export default function OnboardingScreen() {
       <View style={[styles.overlay, { backgroundColor: "rgba(0,0,0,0.60)" }]} />
       <View style={styles.container}>
         <View style={[styles.header, { paddingTop: topPad + 16 }]}>
+          <Image source={LOGO} style={styles.headerLogo} resizeMode="contain" />
           <TouchableOpacity onPress={() => router.replace("/login")}>
             <Text style={styles.skip}>Skip</Text>
           </TouchableOpacity>
@@ -153,10 +156,13 @@ const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject },
   container: { flex: 1 },
   header: {
-    alignItems: "flex-end",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 24,
     paddingBottom: 8,
   },
+  headerLogo: { width: 44, height: 44 },
   skip: { fontFamily: "Inter_500Medium", fontSize: 16, color: "rgba(255,255,255,0.75)" },
   slide: {
     alignItems: "center",

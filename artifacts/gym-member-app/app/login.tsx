@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,6 +15,8 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+
+const LOGO = require("../assets/images/logo.png");
 
 export default function LoginScreen() {
   const colors = useColors();
@@ -64,10 +67,8 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.logoArea}>
-          <View style={[styles.logoIcon, { backgroundColor: colors.primary }]}>
-            <Text style={styles.logoText}>GF</Text>
-          </View>
-          <Text style={[styles.appName, { color: colors.foreground }]}>GymFit</Text>
+          <Image source={LOGO} style={styles.logoImage} resizeMode="contain" />
+          <Text style={[styles.appName, { color: colors.foreground }]}>Core X</Text>
           <Text style={[styles.tagline, { color: colors.mutedForeground }]}>
             Your fitness journey starts here
           </Text>
@@ -134,15 +135,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 24 },
   logoArea: { alignItems: "center", marginBottom: 40 },
-  logoIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  logoText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 26 },
+  logoImage: { width: 100, height: 100, marginBottom: 8 },
   appName: { fontFamily: "Inter_700Bold", fontSize: 28 },
   tagline: { fontFamily: "Inter_400Regular", fontSize: 15, marginTop: 4 },
   form: { gap: 0 },
