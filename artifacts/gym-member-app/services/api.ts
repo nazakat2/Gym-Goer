@@ -56,6 +56,10 @@ class ApiService {
     return this.request<any>("/profile", "PUT", data);
   }
 
+  async getAvatar() {
+    return this.request<{ avatar: string }>("/profile/avatar");
+  }
+
   // Membership
   async getMembership() {
     return this.request<any>("/membership");

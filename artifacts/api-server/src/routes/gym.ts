@@ -4,6 +4,19 @@ import jwt from "jsonwebtoken";
 const router = Router();
 const SECRET = process.env["SESSION_SECRET"] || "gym_secret_key_2026";
 
+// ─── In-memory user store (persists for server lifetime) ───────────────────
+const userStore = new Map<string, any>();
+userStore.set("u1", {
+  id: "u1",
+  name: "Alex Johnson",
+  email: "alex@example.com",
+  phone: "+1 (555) 123-4567",
+  membershipType: "Premium",
+  membershipExpiry: "2026-12-31",
+  joinDate: "2024-01-15",
+  avatar: null,
+});
+
 // Middleware: verify token
 function auth(req: any, res: any, next: any) {
   const header = req.headers["authorization"];
@@ -54,16 +67,23 @@ router.post("/auth/forgot-password", (req, res) => {
 });
 
 // ─── Profile ───────────────────────────────────────────────────────────────
-router.get("/profile", auth, (req, res) => {
-  return res.json({
-    id: "u1", name: "Alex Johnson", email: "alex@example.com",
-    phone: "+1 (555) 123-4567", membershipType: "Premium",
-    membershipExpiry: "2026-12-31", joinDate: "2024-01-15",
-  });
+router.get("/profile", auth, (req: any, res) => {
+  const existing = userStore.get(req.userId) || userStore.get("u1");
+  return res.json(existing);
 });
 
-router.put("/profile", auth, (req, res) => {
-  return res.json({ ...req.body, id: "u1" });
+router.put("/profile", auth, (req: any, res) => {
+  const existing = userStore.get(req.userId) || userStore.get("u1");
+  const updated = { ...existing, ...req.body, id: req.userId || "u1" };
+  userStore.set(req.userId || "u1", updated);
+  const { avatar, ...safeResponse } = updated;
+  return res.json({ ...safeResponse, hasAvatar: !!avatar });
+});
+
+router.get("/profile/avatar", auth, (req: any, res) => {
+  const user = userStore.get(req.userId) || userStore.get("u1");
+  if (!user?.avatar) return res.status(404).json({ message: "No avatar" });
+  return res.json({ avatar: user.avatar });
 });
 
 // ─── Membership ────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Alert,
   Animated,
@@ -12,13 +12,46 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { apiService } from "@/services/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Avatar } from "@/components/ui/Avatar";
+
+const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+async function getBase64FromUri(uri: string): Promise<string> {
+  if (Platform.OS === "web") {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } else {
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return `data:image/jpeg;base64,${base64}`;
+  }
+}
+
+async function getFileSizeBytes(uri: string, nativeFileSize?: number): Promise<number> {
+  if (Platform.OS !== "web" && nativeFileSize) return nativeFileSize;
+  if (Platform.OS !== "web") {
+    const info = await FileSystem.getInfoAsync(uri) as any;
+    return info?.size ?? 0;
+  }
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  return blob.size;
+}
 
 export default function EditProfileScreen() {
   const colors = useColors();
@@ -32,38 +65,39 @@ export default function EditProfileScreen() {
   const [avatar, setAvatar] = useState<string | null>(user?.avatar || null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [toastVisible, setToastVisible] = useState(false);
 
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
   const toastAnim = useRef(new Animated.Value(0)).current;
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = () => {
-    setToastVisible(true);
-    Animated.spring(toastAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 80,
-      friction: 10,
-    }).start();
+  useEffect(() => {
+    // Load avatar from backend if not in local state
+    if (!avatar) {
+      apiService.getAvatar().then((res) => {
+        if (res?.avatar) {
+          setAvatar(res.avatar);
+          updateUser({ avatar: res.avatar });
+        }
+      }).catch(() => {});
+    }
+    return () => { if (toastTimer.current) clearTimeout(toastTimer.current); };
+  }, []);
 
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastMsg(msg);
+    setToastType(type);
+    setToastVisible(true);
+    Animated.spring(toastAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 10 }).start();
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => {
-      Animated.timing(toastAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
         setToastVisible(false);
-        router.back();
+        if (type === "success") router.back();
       });
-    }, 2000);
+    }, 2200);
   };
-
-  useEffect(() => {
-    return () => {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-    };
-  }, []);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -72,6 +106,23 @@ export default function EditProfileScreen() {
     else if (!/\S+@\S+\.\S+/.test(email)) e.email = "Invalid email";
     setErrors(e);
     return Object.keys(e).length === 0;
+  };
+
+  const processPickedImage = async (
+    uri: string,
+    fileSize?: number
+  ): Promise<void> => {
+    try {
+      const sizeBytes = await getFileSizeBytes(uri, fileSize);
+      if (sizeBytes > MAX_SIZE_BYTES) {
+        const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(1);
+        showToast(`Image is ${sizeMB}MB — maximum allowed size is 5MB. Please choose a smaller image.`, "error");
+        return;
+      }
+      setAvatar(uri);
+    } catch {
+      showToast("Could not process image. Please try again.", "error");
+    }
   };
 
   const openLibrary = async () => {
@@ -89,7 +140,8 @@ export default function EditProfileScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets.length > 0) {
-      setAvatar(result.assets[0].uri);
+      const asset = result.assets[0];
+      await processPickedImage(asset.uri, asset.fileSize);
     }
   };
 
@@ -105,7 +157,8 @@ export default function EditProfileScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets.length > 0) {
-      setAvatar(result.assets[0].uri);
+      const asset = result.assets[0];
+      await processPickedImage(asset.uri, asset.fileSize);
     }
   };
 
@@ -125,17 +178,39 @@ export default function EditProfileScreen() {
   const handleSave = async () => {
     if (!validate()) return;
     setLoading(true);
-    setTimeout(async () => {
+    try {
+      let base64Avatar: string | undefined;
+
+      if (avatar && !avatar.startsWith("data:")) {
+        base64Avatar = await getBase64FromUri(avatar);
+      } else {
+        base64Avatar = avatar || undefined;
+      }
+
+      await apiService.updateProfile({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        avatar: base64Avatar,
+      });
+
       await updateUser({
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
-        avatar: avatar || undefined,
+        avatar: base64Avatar,
       });
+
       setLoading(false);
-      showToast();
-    }, 800);
+      showToast("Profile saved successfully!", "success");
+    } catch {
+      setLoading(false);
+      showToast("Failed to save. Please try again.", "error");
+    }
   };
+
+  const sizeLimit = "Max 5MB";
+  const isError = toastType === "error";
 
   return (
     <KeyboardAvoidingView
@@ -155,7 +230,7 @@ export default function EditProfileScreen() {
           <View style={{ width: 24 }} />
         </View>
 
-        {/* Avatar with camera overlay */}
+        {/* Avatar */}
         <View style={styles.avatarSection}>
           <TouchableOpacity
             onPress={handleChangePhoto}
@@ -170,6 +245,9 @@ export default function EditProfileScreen() {
           <TouchableOpacity onPress={handleChangePhoto} activeOpacity={0.7}>
             <Text style={[styles.changePhotoText, { color: colors.primary }]}>Change Photo</Text>
           </TouchableOpacity>
+          <Text style={[styles.sizeHint, { color: colors.mutedForeground }]}>
+            {sizeLimit} · JPG, PNG supported
+          </Text>
         </View>
 
         {/* Form */}
@@ -214,7 +292,7 @@ export default function EditProfileScreen() {
         />
       </ScrollView>
 
-      {/* Success Toast */}
+      {/* Toast */}
       {toastVisible && (
         <Animated.View
           style={[
@@ -231,14 +309,26 @@ export default function EditProfileScreen() {
               ],
             },
           ]}
+          pointerEvents="none"
         >
-          <View style={styles.toastInner}>
+          <View
+            style={[
+              styles.toastInner,
+              { backgroundColor: isError ? "#C0392B" : "#1A7A4A" },
+            ]}
+          >
             <View style={styles.toastIconWrap}>
-              <Feather name="check-circle" size={22} color="#FFF" />
+              <Feather
+                name={isError ? "alert-circle" : "check-circle"}
+                size={22}
+                color="#FFF"
+              />
             </View>
-            <View>
-              <Text style={styles.toastTitle}>Profile Saved!</Text>
-              <Text style={styles.toastSub}>Your changes have been saved successfully.</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.toastTitle}>
+                {isError ? "Upload Failed" : "Profile Saved!"}
+              </Text>
+              <Text style={styles.toastSub}>{toastMsg}</Text>
             </View>
           </View>
         </Animated.View>
@@ -256,7 +346,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   screenTitle: { fontFamily: "Inter_700Bold", fontSize: 18 },
-  avatarSection: { alignItems: "center", marginBottom: 32, gap: 10 },
+  avatarSection: { alignItems: "center", marginBottom: 28, gap: 8 },
   avatarWrapper: {
     width: 100,
     height: 100,
@@ -273,6 +363,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   changePhotoText: { fontFamily: "Inter_500Medium", fontSize: 14 },
+  sizeHint: { fontFamily: "Inter_400Regular", fontSize: 12 },
   divider: { height: 1, marginVertical: 20 },
   sectionLabel: { fontFamily: "Inter_700Bold", fontSize: 16, marginBottom: 16 },
   toast: {
@@ -286,7 +377,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: "#1A7A4A",
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 18,
@@ -304,11 +394,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  toastTitle: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 15,
-    color: "#FFF",
-  },
+  toastTitle: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#FFF" },
   toastSub: {
     fontFamily: "Inter_400Regular",
     fontSize: 12,
