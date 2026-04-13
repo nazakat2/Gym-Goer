@@ -1,7 +1,6 @@
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -42,25 +41,10 @@ export default function LoginScreen() {
     if (!validate()) return;
     setLoading(true);
     try {
-      await login(email.trim().toLowerCase(), password);
+      await login(email.trim(), password);
       router.replace("/(tabs)/home");
     } catch (err: any) {
-      // Use dummy login for demo
-      try {
-        const demoUser = {
-          id: "u1", name: "Alex Johnson", email: email.trim(),
-          membershipType: "Premium", membershipExpiry: "2026-12-31", joinDate: "2024-01-15",
-        };
-        const demoToken = "demo_jwt_token_" + Date.now();
-        const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
-        await AsyncStorage.setItem("auth_token", demoToken);
-        await AsyncStorage.setItem("auth_user", JSON.stringify(demoUser));
-        const { apiService } = await import("@/services/api");
-        apiService.setToken(demoToken);
-        router.replace("/(tabs)/home");
-      } catch {
-        Alert.alert("Login Failed", err.message || "Please try again");
-      }
+      setErrors({ email: err.message || "Login failed. Please try again." });
     } finally {
       setLoading(false);
     }

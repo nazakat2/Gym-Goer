@@ -4,18 +4,41 @@ import jwt from "jsonwebtoken";
 const router = Router();
 const SECRET = process.env["SESSION_SECRET"] || "gym_secret_key_2026";
 
-// ─── In-memory user store (persists for server lifetime) ───────────────────
-const userStore = new Map<string, any>();
-userStore.set("u1", {
-  id: "u1",
-  name: "Alex Johnson",
-  email: "alex@example.com",
-  phone: "+1 (555) 123-4567",
-  membershipType: "Premium",
-  membershipExpiry: "2026-12-31",
-  joinDate: "2024-01-15",
-  avatar: null,
-});
+// ─── In-memory stores ──────────────────────────────────────────────────────
+const userStore = new Map<string, any>();   // userId → user data
+const emailStore = new Map<string, string>(); // email → userId
+
+function nameFromEmail(email: string): string {
+  const local = email.split("@")[0];
+  return local
+    .split(/[._\-+]/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
+
+function getOrCreateUserByEmail(email: string, extraData: any = {}): any {
+  const existingId = emailStore.get(email.toLowerCase());
+  if (existingId) {
+    const existing = userStore.get(existingId);
+    if (existing) return existing;
+  }
+  const id = "u_" + email.replace(/[^a-z0-9]/gi, "_");
+  const newUser = {
+    id,
+    name: nameFromEmail(email),
+    email,
+    phone: "",
+    membershipType: "Premium",
+    membershipExpiry: "2026-12-31",
+    joinDate: new Date().toISOString().split("T")[0],
+    avatar: null,
+    ...extraData,
+  };
+  userStore.set(id, newUser);
+  emailStore.set(email.toLowerCase(), id);
+  return newUser;
+}
 
 // Middleware: verify token
 function auth(req: any, res: any, next: any) {
@@ -42,24 +65,32 @@ function auth(req: any, res: any, next: any) {
 router.post("/auth/login", (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ message: "Email and password required" });
-  const user = {
-    id: "u1", name: "Alex Johnson", email,
-    membershipType: "Premium", membershipExpiry: "2026-12-31", joinDate: "2024-01-15",
-  };
+  const user = getOrCreateUserByEmail(email.trim().toLowerCase());
   const token = jwt.sign({ id: user.id }, SECRET, { expiresIn: "30d" });
-  return res.json({ token, user });
+  const { avatar, ...safeUser } = user;
+  return res.json({ token, user: { ...safeUser, hasAvatar: !!avatar } });
 });
 
 router.post("/auth/signup", (req, res) => {
   const { name, email, password, phone } = req.body;
   if (!name || !email || !password) return res.status(400).json({ message: "Missing fields" });
+  const emailKey = email.trim().toLowerCase();
+  const id = "u_" + Date.now();
   const user = {
-    id: "u_" + Date.now(), name, email, phone,
-    membershipType: "Basic", membershipExpiry: "2027-01-01",
+    id,
+    name: name.trim(),
+    email: emailKey,
+    phone: phone || "",
+    membershipType: "Basic",
+    membershipExpiry: "2027-01-01",
     joinDate: new Date().toISOString().split("T")[0],
+    avatar: null,
   };
-  const token = jwt.sign({ id: user.id }, SECRET, { expiresIn: "30d" });
-  return res.json({ token, user });
+  userStore.set(id, user);
+  emailStore.set(emailKey, id);
+  const token = jwt.sign({ id }, SECRET, { expiresIn: "30d" });
+  const { avatar, ...safeUser } = user;
+  return res.json({ token, user: safeUser });
 });
 
 router.post("/auth/forgot-password", (req, res) => {
@@ -68,20 +99,22 @@ router.post("/auth/forgot-password", (req, res) => {
 
 // ─── Profile ───────────────────────────────────────────────────────────────
 router.get("/profile", auth, (req: any, res) => {
-  const existing = userStore.get(req.userId) || userStore.get("u1");
-  return res.json(existing);
+  const user = userStore.get(req.userId);
+  if (!user) return res.status(404).json({ message: "Profile not found" });
+  const { avatar, ...safeUser } = user;
+  return res.json({ ...safeUser, hasAvatar: !!avatar });
 });
 
 router.put("/profile", auth, (req: any, res) => {
-  const existing = userStore.get(req.userId) || userStore.get("u1");
-  const updated = { ...existing, ...req.body, id: req.userId || "u1" };
-  userStore.set(req.userId || "u1", updated);
-  const { avatar, ...safeResponse } = updated;
-  return res.json({ ...safeResponse, hasAvatar: !!avatar });
+  const existing = userStore.get(req.userId) || {};
+  const updated = { ...existing, ...req.body, id: req.userId };
+  userStore.set(req.userId, updated);
+  const { avatar, ...safeUser } = updated;
+  return res.json({ ...safeUser, hasAvatar: !!avatar });
 });
 
 router.get("/profile/avatar", auth, (req: any, res) => {
-  const user = userStore.get(req.userId) || userStore.get("u1");
+  const user = userStore.get(req.userId);
   if (!user?.avatar) return res.status(404).json({ message: "No avatar" });
   return res.json({ avatar: user.avatar });
 });
