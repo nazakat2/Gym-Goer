@@ -34,7 +34,7 @@ const slides = [
   },
   {
     id: "2",
-    image: null,
+    image: SPLASH_BG,
     icon: "calendar" as const,
     title: "Book Classes",
     description:
