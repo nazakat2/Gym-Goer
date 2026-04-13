@@ -1,7 +1,8 @@
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Alert,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -31,6 +32,38 @@ export default function EditProfileScreen() {
   const [avatar, setAvatar] = useState<string | null>(user?.avatar || null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [toastVisible, setToastVisible] = useState(false);
+
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = () => {
+    setToastVisible(true);
+    Animated.spring(toastAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 80,
+      friction: 10,
+    }).start();
+
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setToastVisible(false);
+        router.back();
+      });
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, []);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -100,9 +133,7 @@ export default function EditProfileScreen() {
         avatar: avatar || undefined,
       });
       setLoading(false);
-      Alert.alert("Success", "Profile updated successfully!", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      showToast();
     }, 800);
   };
 
@@ -182,6 +213,36 @@ export default function EditProfileScreen() {
           style={{ marginTop: 24, marginBottom: 40 }}
         />
       </ScrollView>
+
+      {/* Success Toast */}
+      {toastVisible && (
+        <Animated.View
+          style={[
+            styles.toast,
+            {
+              opacity: toastAnim,
+              transform: [
+                {
+                  translateY: toastAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [40, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.toastInner}>
+            <View style={styles.toastIconWrap}>
+              <Feather name="check-circle" size={22} color="#FFF" />
+            </View>
+            <View>
+              <Text style={styles.toastTitle}>Profile Saved!</Text>
+              <Text style={styles.toastSub}>Your changes have been saved successfully.</Text>
+            </View>
+          </View>
+        </Animated.View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -214,4 +275,44 @@ const styles = StyleSheet.create({
   changePhotoText: { fontFamily: "Inter_500Medium", fontSize: 14 },
   divider: { height: 1, marginVertical: 20 },
   sectionLabel: { fontFamily: "Inter_700Bold", fontSize: 16, marginBottom: 16 },
+  toast: {
+    position: "absolute",
+    bottom: 40,
+    left: 16,
+    right: 16,
+    zIndex: 999,
+  },
+  toastInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#1A7A4A",
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  toastIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toastTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 15,
+    color: "#FFF",
+  },
+  toastSub: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: "rgba(255,255,255,0.85)",
+    marginTop: 2,
+  },
 });
