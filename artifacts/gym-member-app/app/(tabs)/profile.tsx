@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import React from "react";
-import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
@@ -51,7 +51,12 @@ export default function ProfileScreen() {
       {/* Profile Card */}
       <Card style={styles.profileCard}>
         <View style={styles.profileRow}>
-          <Avatar name={user?.name || "Member"} uri={user?.avatar} size={72} />
+          <TouchableOpacity onPress={() => router.push("/edit-profile")} activeOpacity={0.8}>
+            <Avatar name={user?.name || "Member"} uri={user?.avatar} size={72} />
+            <View style={[styles.avatarEditBadge, { backgroundColor: colors.primary }]}>
+              <Feather name="camera" size={11} color="#FFF" />
+            </View>
+          </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={[styles.profileName, { color: colors.foreground }]}>{user?.name || "Alex Johnson"}</Text>
             <Text style={[styles.profileEmail, { color: colors.mutedForeground }]}>{user?.email}</Text>
@@ -137,4 +142,16 @@ const styles = StyleSheet.create({
   menuLabel: { fontFamily: "Inter_500Medium", fontSize: 15, flex: 1 },
   logoutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14 },
   logoutText: { fontFamily: "Inter_600SemiBold", fontSize: 16 },
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#FFF",
+  },
 });
