@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Activity, Eye, EyeOff, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Activity, Eye, EyeOff, ArrowLeft, CheckCircle2, ClipboardPaste } from "lucide-react";
 
 type Step =
   | "login"
@@ -38,8 +39,9 @@ export default function Login() {
   const [suEmail, setSuEmail] = useState("");
   const [suPassword, setSuPassword] = useState("");
   const [suConfirm, setSuConfirm] = useState("");
+  const [suRole, setSuRole] = useState("staff");
   const [showSuPassword, setShowSuPassword] = useState(false);
-  const [suSuccess, setSuSuccess] = useState<{ name: string; email: string } | null>(null);
+  const [suSuccess, setSuSuccess] = useState<{ name: string; email: string; role: string } | null>(null);
 
   // ── Forgot ─────────────────────────────────────────────────────────────────
   const [fpEmail, setFpEmail] = useState("");
@@ -95,7 +97,7 @@ export default function Login() {
     if (suPassword !== suConfirm) { setError("Passwords do not match"); return; }
     setError(""); setLoading(true);
     try {
-      await apiFetch("/api/auth/send-signup-otp", { name: suName, email: suEmail, password: suPassword });
+      await apiFetch("/api/auth/send-signup-otp", { name: suName, email: suEmail, password: suPassword, role: suRole });
       resetOtp(); setStep("signup-otp"); startCooldown();
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); }
@@ -109,7 +111,7 @@ export default function Login() {
     try {
       const data = await apiFetch("/api/auth/register", { email: suEmail, otp: getOtp() });
       const u = (data as any).user;
-      setSuSuccess({ name: u?.name || suName, email: u?.email || suEmail });
+      setSuSuccess({ name: u?.name || suName, email: u?.email || suEmail, role: u?.role || suRole });
       setStep("signup-success");
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); }
@@ -198,6 +200,21 @@ export default function Login() {
     </div>
   );
 
+  const handlePasteOtp = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const digits = text.replace(/\D/g, "").slice(0, OTP_LEN).split("");
+      if (digits.length > 0) {
+        const filled = [...Array(OTP_LEN)].map((_, i) => digits[i] || "");
+        setOtpDigits(filled);
+        const lastFilled = Math.min(digits.length, OTP_LEN) - 1;
+        otpRefs.current[lastFilled]?.focus();
+      }
+    } catch {
+      setError("Could not read clipboard. Please paste manually.");
+    }
+  };
+
   const ResendRow = ({ onResend }: { onResend: () => void }) => (
     <p className="text-center text-xs text-muted-foreground">
       Didn't receive it?{" "}
@@ -256,7 +273,7 @@ export default function Login() {
                 <p className="text-sm text-muted-foreground">
                   Don't have an account?{" "}
                   <button type="button"
-                    onClick={() => { setStep("signup-form"); clearError(); setSuName(""); setSuEmail(""); setSuPassword(""); setSuConfirm(""); }}
+                    onClick={() => { setStep("signup-form"); clearError(); setSuName(""); setSuEmail(""); setSuPassword(""); setSuConfirm(""); setSuRole("staff"); }}
                     className="text-primary font-semibold hover:underline">
                     Create Account
                   </button>
@@ -305,6 +322,18 @@ export default function Login() {
                   <Input id="su-confirm" type="password" placeholder="Re-enter password" value={suConfirm}
                     onChange={e => { setSuConfirm(e.target.value); clearError(); }} />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="su-role">Role</Label>
+                  <Select value={suRole} onValueChange={val => { setSuRole(val); clearError(); }}>
+                    <SelectTrigger id="su-role">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="staff">Staff (Limited Access)</SelectItem>
+                      <SelectItem value="admin">Admin (Full Access)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <ErrorBox />
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Sending OTP..." : "Send Verification Code"}
@@ -329,6 +358,10 @@ export default function Login() {
             <CardContent>
               <form onSubmit={handleVerifySignup} className="space-y-5">
                 <OtpBoxes />
+                <button type="button" onClick={handlePasteOtp}
+                  className="flex items-center gap-1.5 mx-auto text-xs text-primary hover:underline">
+                  <ClipboardPaste className="h-3.5 w-3.5" /> Paste Code from Clipboard
+                </button>
                 <ErrorBox />
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Creating account..." : "Verify & Create Account"}
@@ -344,11 +377,14 @@ export default function Login() {
           <Card className="shadow-md">
             <CardContent className="pt-8 pb-6 flex flex-col items-center gap-4 text-center">
               <CheckCircle2 className="h-14 w-14 text-green-500" />
-              <div>
+              <div className="space-y-2">
                 <h2 className="text-xl font-bold">Account Created!</h2>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground">
                   Welcome, <strong>{suSuccess?.name}</strong>. You can now sign in with your credentials.
                 </p>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary">
+                  Role: {suSuccess?.role === "admin" ? "Admin (Full Access)" : "Staff (Limited Access)"}
+                </div>
               </div>
               <Button className="w-full mt-2" onClick={() => {
                 setEmail(suSuccess?.email || ""); setStep("login"); clearError();
@@ -400,6 +436,10 @@ export default function Login() {
             <CardContent>
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <OtpBoxes />
+                <button type="button" onClick={handlePasteOtp}
+                  className="flex items-center gap-1.5 mx-auto text-xs text-primary hover:underline">
+                  <ClipboardPaste className="h-3.5 w-3.5" /> Paste Code from Clipboard
+                </button>
                 <div className="space-y-2">
                   <Label htmlFor="fp-new">New Password</Label>
                   <div className="relative">

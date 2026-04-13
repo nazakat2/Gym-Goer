@@ -21,7 +21,7 @@ const transporter = nodemailer.createTransport({
 
 // ── OTP stores ─────────────────────────────────────────────────────────────
 const otpStore = new Map<string, { otp: string; expiresAt: number }>();           // password reset
-const signupOtpStore = new Map<string, { otp: string; expiresAt: number; name: string; password: string }>(); // signup verify
+const signupOtpStore = new Map<string, { otp: string; expiresAt: number; name: string; password: string; role: string }>(); // signup verify
 
 // ── Auth ─────────────────────────────────────────────────────
 router.post("/auth/login", async (req, res) => {
@@ -121,7 +121,7 @@ router.post("/auth/reset-password", async (req, res) => {
 
 // POST /auth/send-signup-otp — send email verification OTP for new admin account
 router.post("/auth/send-signup-otp", async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, role } = req.body;
   if (!name || !email || !password) return res.status(400).json({ message: "All fields are required" });
   if (password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
 
@@ -132,8 +132,9 @@ router.post("/auth/send-signup-otp", async (req, res) => {
 
   if (!emailUser || !emailPass) return res.status(503).json({ message: "Email service not configured" });
 
+  const validRole = role === "admin" ? "admin" : "staff";
   const otp = String(Math.floor(100000 + Math.random() * 900000));
-  signupOtpStore.set(emailKey, { otp, expiresAt: Date.now() + 10 * 60 * 1000, name: name.trim(), password });
+  signupOtpStore.set(emailKey, { otp, expiresAt: Date.now() + 10 * 60 * 1000, name: name.trim(), password, role: validRole });
 
   try {
     await transporter.sendMail({
@@ -177,12 +178,16 @@ router.post("/auth/register", async (req, res) => {
     .from(adminUsersTable).where(eq(adminUsersTable.email, emailKey));
   if (existing) return res.status(409).json({ message: "An account with this email already exists" });
 
+  const defaultPermissions = entry.role === "admin"
+    ? ["members", "measurements", "attendance", "employees", "billing", "pos", "inventory", "accounts", "reports", "admin-users", "notifications", "settings"]
+    : ["members", "attendance"];
+
   const [newUser] = await db.insert(adminUsersTable).values({
     name: entry.name,
     email: emailKey,
     password: entry.password,
-    role: "staff",
-    permissions: ["members", "attendance"],
+    role: entry.role,
+    permissions: defaultPermissions,
     status: "active",
   }).returning();
 
