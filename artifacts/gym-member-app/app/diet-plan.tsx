@@ -1,13 +1,13 @@
 import { router } from "expo-router";
-import React, { useState } from "react";
-import { ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import { DUMMY_DIET_PLANS } from "@/utils/dummyData";
+import { apiService } from "@/services/api";
 
 const HERO_DIET = require("../assets/images/hero-diet.png");
 
@@ -15,13 +15,31 @@ export default function DietPlanScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const plan = DUMMY_DIET_PLANS[0];
+  const [plans, setPlans] = useState<any[]>([]);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const macros = [
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await apiService.getDietPlans();
+        setPlans(data);
+        if (data.length > 0) setSelected(data[0].id);
+      } catch {
+        setPlans([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const plan = plans.find((p) => p.id === selected) || plans[0];
+
+  const macros = plan ? [
     { label: "Protein", value: plan.protein, max: 200, unit: "g", color: "#E31C25" },
     { label: "Carbs", value: plan.carbs, max: 400, unit: "g", color: "#FF6B35" },
     { label: "Fat", value: plan.fat, max: 100, unit: "g", color: "#F59E0B" },
-  ];
+  ] : [];
 
   return (
     <ScrollView
@@ -37,75 +55,106 @@ export default function DietPlanScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* Overview Hero */}
-      <ImageBackground
-        source={HERO_DIET}
-        style={styles.heroBanner}
-        imageStyle={styles.heroImage}
-        resizeMode="cover"
-      >
-        <View style={styles.heroOverlay}>
-          <View style={styles.heroHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroTitle}>{plan.name}</Text>
-              <Text style={styles.heroGoal}>{plan.goal}</Text>
-            </View>
-            {plan.isActive && <Badge label="Active" variant="success" />}
-          </View>
-          <View style={[styles.calRow, { backgroundColor: "rgba(0,0,0,0.35)", borderRadius: 12 }]}>
-            <Feather name="zap" size={28} color="#FFD700" />
-            <View>
-              <Text style={styles.calValue}>{plan.calories}</Text>
-              <Text style={styles.calLabel}>Daily Calories</Text>
-            </View>
-            <View style={styles.dietitianRow}>
-              <Feather name="user" size={14} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.dietitianText}>{plan.dietitian}</Text>
-            </View>
-          </View>
+      {loading ? (
+        <View style={{ paddingTop: 60, alignItems: "center" }}>
+          <ActivityIndicator color={colors.primary} size="large" />
+          <Text style={{ color: colors.mutedForeground, marginTop: 12, fontFamily: "Inter_400Regular" }}>Loading plans...</Text>
         </View>
-      </ImageBackground>
+      ) : plans.length === 0 ? (
+        <View style={{ paddingTop: 60, alignItems: "center" }}>
+          <Feather name="coffee" size={48} color={colors.mutedForeground} />
+          <Text style={{ color: colors.mutedForeground, marginTop: 12, fontFamily: "Inter_400Regular" }}>No diet plans available</Text>
+        </View>
+      ) : (
+        <>
+          {plans.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.planTabs}>
+              {plans.map((p) => (
+                <TouchableOpacity
+                  key={p.id}
+                  onPress={() => setSelected(p.id)}
+                  style={[styles.planTab, { backgroundColor: selected === p.id ? colors.primary : colors.card, borderColor: selected === p.id ? colors.primary : colors.border, borderRadius: colors.radius }]}
+                >
+                  <Text style={[styles.planTabText, { color: selected === p.id ? "#FFF" : colors.foreground }]}>{p.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
 
-      {/* Macros */}
-      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Macronutrients</Text>
-      <Card>
-        {macros.map((m, i) => (
-          <View key={m.label} style={[styles.macroRow, i > 0 && { marginTop: 16 }]}>
-            <View style={styles.macroLabel}>
-              <View style={[styles.macroColorDot, { backgroundColor: m.color }]} />
-              <Text style={[styles.macroName, { color: colors.foreground }]}>{m.label}</Text>
-            </View>
-            <View style={{ flex: 1, marginHorizontal: 12 }}>
-              <ProgressBar progress={m.value / m.max} color={m.color} height={8} />
-            </View>
-            <Text style={[styles.macroValue, { color: colors.foreground }]}>{m.value}{m.unit}</Text>
-          </View>
-        ))}
-      </Card>
+          {plan && (
+            <>
+              <ImageBackground source={HERO_DIET} style={styles.heroBanner} imageStyle={styles.heroImage} resizeMode="cover">
+                <View style={styles.heroOverlay}>
+                  <View style={styles.heroHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.heroTitle}>{plan.name}</Text>
+                      <Text style={styles.heroGoal}>{plan.goal}</Text>
+                    </View>
+                    {plan.isActive && <Badge label="Active" variant="success" />}
+                  </View>
+                  <View style={[styles.calRow, { backgroundColor: "rgba(0,0,0,0.35)", borderRadius: 12 }]}>
+                    <Feather name="zap" size={28} color="#FFD700" />
+                    <View>
+                      <Text style={styles.calValue}>{plan.calories}</Text>
+                      <Text style={styles.calLabel}>Daily Calories</Text>
+                    </View>
+                    {plan.dietitian ? (
+                      <View style={styles.dietitianRow}>
+                        <Feather name="user" size={14} color="rgba(255,255,255,0.7)" />
+                        <Text style={styles.dietitianText}>{plan.dietitian}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              </ImageBackground>
 
-      {/* Meals */}
-      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Daily Meals</Text>
-      {plan.meals.map((meal, i) => (
-        <Card key={i} style={styles.mealCard}>
-          <View style={styles.mealHeader}>
-            <View style={[styles.mealTimeBox, { backgroundColor: colors.primary + "15", borderRadius: 8 }]}>
-              <Text style={[styles.mealTime, { color: colors.primary }]}>{meal.time}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.mealType, { color: colors.foreground }]}>{meal.type}</Text>
-              <Text style={[styles.mealCals, { color: colors.mutedForeground }]}>{meal.calories} kcal</Text>
-            </View>
-            <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
-          </View>
-          <View style={[styles.mealDivider, { backgroundColor: colors.border }]} />
-          {meal.items.map((item, j) => (
-            <View key={j} style={styles.mealItem}>
-              <View style={[styles.mealItemDot, { backgroundColor: colors.primary }]} />
-              <Text style={[styles.mealItemText, { color: colors.foreground }]}>{item}</Text>
-            </View>
-          ))}
-        </Card>
-      ))}
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Macronutrients</Text>
+              <Card>
+                {macros.map((m, i) => (
+                  <View key={m.label} style={[styles.macroRow, i > 0 && { marginTop: 16 }]}>
+                    <View style={styles.macroLabel}>
+                      <View style={[styles.macroColorDot, { backgroundColor: m.color }]} />
+                      <Text style={[styles.macroName, { color: colors.foreground }]}>{m.label}</Text>
+                    </View>
+                    <View style={{ flex: 1, marginHorizontal: 12 }}>
+                      <ProgressBar progress={Math.min(m.value / m.max, 1)} color={m.color} height={8} />
+                    </View>
+                    <Text style={[styles.macroValue, { color: colors.foreground }]}>{m.value}{m.unit}</Text>
+                  </View>
+                ))}
+              </Card>
+
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Daily Meals</Text>
+              {(plan.meals || []).map((meal: any, i: number) => (
+                <Card key={meal.id || i} style={styles.mealCard}>
+                  <View style={styles.mealHeader}>
+                    <View style={[styles.mealTimeBox, { backgroundColor: colors.primary + "15", borderRadius: 8 }]}>
+                      <Text style={[styles.mealTime, { color: colors.primary }]}>{meal.time}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.mealType, { color: colors.foreground }]}>{meal.type}</Text>
+                      <Text style={[styles.mealCals, { color: colors.mutedForeground }]}>{meal.calories} kcal</Text>
+                    </View>
+                    <Feather name="chevron-down" size={18} color={colors.mutedForeground} />
+                  </View>
+                  <View style={[styles.mealDivider, { backgroundColor: colors.border }]} />
+                  {(Array.isArray(meal.items) ? meal.items : []).map((item: string, j: number) => (
+                    <View key={j} style={styles.mealItem}>
+                      <View style={[styles.mealItemDot, { backgroundColor: colors.primary }]} />
+                      <Text style={[styles.mealItemText, { color: colors.foreground }]}>{item}</Text>
+                    </View>
+                  ))}
+                </Card>
+              ))}
+              {(!plan.meals || plan.meals.length === 0) && (
+                <View style={{ paddingVertical: 32, alignItems: "center" }}>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>No meals added yet</Text>
+                </View>
+              )}
+            </>
+          )}
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -114,6 +163,9 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   topBar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   screenTitle: { fontFamily: "Inter_700Bold", fontSize: 18 },
+  planTabs: { marginBottom: 16 },
+  planTab: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, marginRight: 10, borderWidth: 1.5 },
+  planTabText: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   heroBanner: { borderRadius: 16, overflow: "hidden", marginBottom: 24 },
   heroImage: { borderRadius: 16 },
   heroOverlay: { backgroundColor: "rgba(0,0,0,0.58)", padding: 20 },

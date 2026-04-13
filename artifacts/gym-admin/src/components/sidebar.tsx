@@ -13,6 +13,7 @@ import {
   FileBarChart,
   Bell,
   Shield,
+  Smartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ const navItems = [
   { href: "/reports", label: "Reports", icon: FileBarChart },
   { href: "/users", label: "Admin Users", icon: Shield },
   { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/app-content", label: "Mobile Content", icon: Smartphone },
   { href: "/business", label: "Business Settings", icon: Settings },
 ];
 

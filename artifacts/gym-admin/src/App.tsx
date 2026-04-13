@@ -18,6 +18,7 @@ import Accounts from "@/pages/accounts";
 import Reports from "@/pages/reports";
 import Notifications from "@/pages/notifications";
 import AdminUsers from "@/pages/admin-users";
+import AppContent from "@/pages/app-content";
 import BusinessSettings from "@/pages/business-settings";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
@@ -66,6 +67,7 @@ function ProtectedRouter() {
         <Route path="/inventory" component={Inventory} />
         <Route path="/accounts" component={Accounts} />
         <Route path="/users" component={AdminUsers} />
+        <Route path="/app-content" component={AppContent} />
         <Route path="/reports" component={Reports} />
         <Route path="/notifications" component={Notifications} />
         <Route path="/business" component={BusinessSettings} />

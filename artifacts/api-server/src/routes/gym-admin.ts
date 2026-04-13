@@ -7,8 +7,10 @@ import {
   posOrdersTable, posOrderItemsTable,
   accountsTable, vouchersTable, adminUsersTable, adminNotificationsTable,
   businessSettingsTable,
+  appAnnouncementsTable, appClassesTable, appWorkoutPlansTable, appWorkoutExercisesTable,
+  appDietPlansTable, appDietMealsTable, appOnboardingSlidesTable,
 } from "@workspace/db";
-import { eq, desc, and, like, or, sql, gte, lte, count } from "drizzle-orm";
+import { eq, desc, asc, and, like, or, sql, gte, lte, count } from "drizzle-orm";
 
 const router = Router();
 
@@ -1023,6 +1025,210 @@ router.get("/reports/members", async (_req, res) => {
       { name: "Yearly", value: byPlan.yearly, color: "#22C55E" },
     ],
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE CONTENT MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Announcements ──────────────────────────────────────────────────────────
+router.get("/app-content/announcements", async (_req, res) => {
+  const rows = await db.select().from(appAnnouncementsTable).orderBy(desc(appAnnouncementsTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/app-content/announcements", async (req, res) => {
+  const { title, body, type } = req.body;
+  if (!title || !body) return res.status(400).json({ message: "Title and body required" });
+  const [row] = await db.insert(appAnnouncementsTable).values({ title, body, type: type || "info" }).returning();
+  res.json(row);
+});
+
+router.put("/app-content/announcements/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { title, body, type, isActive } = req.body;
+  const [row] = await db.update(appAnnouncementsTable)
+    .set({ ...(title !== undefined && { title }), ...(body !== undefined && { body }), ...(type !== undefined && { type }), ...(isActive !== undefined && { isActive }) })
+    .where(eq(appAnnouncementsTable.id, id)).returning();
+  res.json(row);
+});
+
+router.delete("/app-content/announcements/:id", async (req, res) => {
+  await db.delete(appAnnouncementsTable).where(eq(appAnnouncementsTable.id, parseInt(req.params.id)));
+  res.json({ message: "Deleted" });
+});
+
+// ── Classes ───────────────────────────────────────────────────────────────
+router.get("/app-content/classes", async (_req, res) => {
+  const rows = await db.select().from(appClassesTable).orderBy(asc(appClassesTable.date), asc(appClassesTable.time));
+  res.json(rows);
+});
+
+router.post("/app-content/classes", async (req, res) => {
+  const { name, category, instructor, time, date, duration, capacity, location, level } = req.body;
+  if (!name || !instructor || !time || !date) return res.status(400).json({ message: "Missing required fields" });
+  const [row] = await db.insert(appClassesTable).values({
+    name, category: category || "Other", instructor, time, date,
+    duration: duration || 60, capacity: capacity || 20, enrolled: 0,
+    location: location || "Main Floor", level: level || "All levels",
+  }).returning();
+  res.json(row);
+});
+
+router.put("/app-content/classes/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name, category, instructor, time, date, duration, capacity, location, level, isActive } = req.body;
+  const [row] = await db.update(appClassesTable).set({
+    ...(name !== undefined && { name }), ...(category !== undefined && { category }),
+    ...(instructor !== undefined && { instructor }), ...(time !== undefined && { time }),
+    ...(date !== undefined && { date }), ...(duration !== undefined && { duration }),
+    ...(capacity !== undefined && { capacity }), ...(location !== undefined && { location }),
+    ...(level !== undefined && { level }), ...(isActive !== undefined && { isActive }),
+  }).where(eq(appClassesTable.id, id)).returning();
+  res.json(row);
+});
+
+router.delete("/app-content/classes/:id", async (req, res) => {
+  await db.delete(appClassesTable).where(eq(appClassesTable.id, parseInt(req.params.id)));
+  res.json({ message: "Deleted" });
+});
+
+// ── Workout Plans ──────────────────────────────────────────────────────────
+router.get("/app-content/workout-plans", async (_req, res) => {
+  const plans = await db.select().from(appWorkoutPlansTable).orderBy(asc(appWorkoutPlansTable.id));
+  const result = await Promise.all(plans.map(async (p) => {
+    const exercises = await db.select().from(appWorkoutExercisesTable)
+      .where(eq(appWorkoutExercisesTable.planId, p.id)).orderBy(asc(appWorkoutExercisesTable.order));
+    return { ...p, exercises };
+  }));
+  res.json(result);
+});
+
+router.post("/app-content/workout-plans", async (req, res) => {
+  const { name, goal, level, duration, daysPerWeek, trainer, exercises } = req.body;
+  if (!name) return res.status(400).json({ message: "Plan name required" });
+  const [plan] = await db.insert(appWorkoutPlansTable).values({
+    name, goal: goal || "General fitness", level: level || "Beginner",
+    duration: duration || "4 weeks", daysPerWeek: daysPerWeek || 3,
+    trainer: trainer || "",
+  }).returning();
+  if (exercises && Array.isArray(exercises)) {
+    for (let i = 0; i < exercises.length; i++) {
+      const ex = exercises[i];
+      await db.insert(appWorkoutExercisesTable).values({
+        planId: plan.id, name: ex.name, sets: ex.sets || 3, reps: ex.reps || "10", rest: ex.rest || "60s", order: i + 1,
+      });
+    }
+  }
+  const exRows = await db.select().from(appWorkoutExercisesTable).where(eq(appWorkoutExercisesTable.planId, plan.id)).orderBy(asc(appWorkoutExercisesTable.order));
+  res.json({ ...plan, exercises: exRows });
+});
+
+router.put("/app-content/workout-plans/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name, goal, level, duration, daysPerWeek, trainer, isActive, exercises } = req.body;
+  const [plan] = await db.update(appWorkoutPlansTable).set({
+    ...(name !== undefined && { name }), ...(goal !== undefined && { goal }),
+    ...(level !== undefined && { level }), ...(duration !== undefined && { duration }),
+    ...(daysPerWeek !== undefined && { daysPerWeek }), ...(trainer !== undefined && { trainer }),
+    ...(isActive !== undefined && { isActive }),
+  }).where(eq(appWorkoutPlansTable.id, id)).returning();
+  if (exercises && Array.isArray(exercises)) {
+    await db.delete(appWorkoutExercisesTable).where(eq(appWorkoutExercisesTable.planId, id));
+    for (let i = 0; i < exercises.length; i++) {
+      const ex = exercises[i];
+      await db.insert(appWorkoutExercisesTable).values({
+        planId: id, name: ex.name, sets: ex.sets || 3, reps: ex.reps || "10", rest: ex.rest || "60s", order: i + 1,
+      });
+    }
+  }
+  const exRows = await db.select().from(appWorkoutExercisesTable).where(eq(appWorkoutExercisesTable.planId, id)).orderBy(asc(appWorkoutExercisesTable.order));
+  res.json({ ...plan, exercises: exRows });
+});
+
+router.delete("/app-content/workout-plans/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await db.delete(appWorkoutExercisesTable).where(eq(appWorkoutExercisesTable.planId, id));
+  await db.delete(appWorkoutPlansTable).where(eq(appWorkoutPlansTable.id, id));
+  res.json({ message: "Deleted" });
+});
+
+// ── Diet Plans ─────────────────────────────────────────────────────────────
+router.get("/app-content/diet-plans", async (_req, res) => {
+  const plans = await db.select().from(appDietPlansTable).orderBy(asc(appDietPlansTable.id));
+  const result = await Promise.all(plans.map(async (p) => {
+    const meals = await db.select().from(appDietMealsTable)
+      .where(eq(appDietMealsTable.planId, p.id)).orderBy(asc(appDietMealsTable.order));
+    return { ...p, meals };
+  }));
+  res.json(result);
+});
+
+router.post("/app-content/diet-plans", async (req, res) => {
+  const { name, goal, calories, protein, carbs, fat, dietitian, meals } = req.body;
+  if (!name) return res.status(400).json({ message: "Plan name required" });
+  const [plan] = await db.insert(appDietPlansTable).values({
+    name, goal: goal || "General health", calories: calories || 2000,
+    protein: protein || 100, carbs: carbs || 250, fat: fat || 70,
+    dietitian: dietitian || "",
+  }).returning();
+  if (meals && Array.isArray(meals)) {
+    for (let i = 0; i < meals.length; i++) {
+      const m = meals[i];
+      await db.insert(appDietMealsTable).values({
+        planId: plan.id, type: m.type, time: m.time,
+        items: m.items || [], calories: m.calories || 0, order: i + 1,
+      });
+    }
+  }
+  const mealRows = await db.select().from(appDietMealsTable).where(eq(appDietMealsTable.planId, plan.id)).orderBy(asc(appDietMealsTable.order));
+  res.json({ ...plan, meals: mealRows });
+});
+
+router.put("/app-content/diet-plans/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name, goal, calories, protein, carbs, fat, dietitian, isActive, meals } = req.body;
+  const [plan] = await db.update(appDietPlansTable).set({
+    ...(name !== undefined && { name }), ...(goal !== undefined && { goal }),
+    ...(calories !== undefined && { calories }), ...(protein !== undefined && { protein }),
+    ...(carbs !== undefined && { carbs }), ...(fat !== undefined && { fat }),
+    ...(dietitian !== undefined && { dietitian }), ...(isActive !== undefined && { isActive }),
+  }).where(eq(appDietPlansTable.id, id)).returning();
+  if (meals && Array.isArray(meals)) {
+    await db.delete(appDietMealsTable).where(eq(appDietMealsTable.planId, id));
+    for (let i = 0; i < meals.length; i++) {
+      const m = meals[i];
+      await db.insert(appDietMealsTable).values({
+        planId: id, type: m.type, time: m.time,
+        items: m.items || [], calories: m.calories || 0, order: i + 1,
+      });
+    }
+  }
+  const mealRows = await db.select().from(appDietMealsTable).where(eq(appDietMealsTable.planId, id)).orderBy(asc(appDietMealsTable.order));
+  res.json({ ...plan, meals: mealRows });
+});
+
+router.delete("/app-content/diet-plans/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  await db.delete(appDietMealsTable).where(eq(appDietMealsTable.planId, id));
+  await db.delete(appDietPlansTable).where(eq(appDietPlansTable.id, id));
+  res.json({ message: "Deleted" });
+});
+
+// ── Onboarding Slides ──────────────────────────────────────────────────────
+router.get("/app-content/onboarding-slides", async (_req, res) => {
+  const rows = await db.select().from(appOnboardingSlidesTable).orderBy(asc(appOnboardingSlidesTable.order));
+  res.json(rows);
+});
+
+router.put("/app-content/onboarding-slides/:id", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { title, subtitle, description, isActive } = req.body;
+  const [row] = await db.update(appOnboardingSlidesTable).set({
+    ...(title !== undefined && { title }), ...(subtitle !== undefined && { subtitle }),
+    ...(description !== undefined && { description }), ...(isActive !== undefined && { isActive }),
+  }).where(eq(appOnboardingSlidesTable.id, id)).returning();
+  res.json(row);
 });
 
 export default router;

@@ -1,13 +1,12 @@
 import { router } from "expo-router";
-import React, { useState } from "react";
-import { ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-
-import { DUMMY_WORKOUT_PLANS } from "@/utils/dummyData";
+import { apiService } from "@/services/api";
 
 const HERO_WORKOUT = require("../assets/images/hero-workout.png");
 
@@ -15,8 +14,25 @@ export default function WorkoutPlanScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const [selected, setSelected] = useState(DUMMY_WORKOUT_PLANS[0].id);
-  const plan = DUMMY_WORKOUT_PLANS.find((p) => p.id === selected) || DUMMY_WORKOUT_PLANS[0];
+  const [plans, setPlans] = useState<any[]>([]);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await apiService.getWorkoutPlans();
+        setPlans(data);
+        if (data.length > 0) setSelected(data[0].id);
+      } catch {
+        setPlans([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const plan = plans.find((p) => p.id === selected) || plans[0];
 
   return (
     <ScrollView
@@ -32,91 +48,113 @@ export default function WorkoutPlanScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* Plan Selector */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.planTabs}>
-        {DUMMY_WORKOUT_PLANS.map((p) => (
-          <TouchableOpacity
-            key={p.id}
-            onPress={() => setSelected(p.id)}
-            style={[
-              styles.planTab,
-              {
-                backgroundColor: selected === p.id ? colors.primary : colors.card,
-                borderColor: selected === p.id ? colors.primary : colors.border,
-                borderRadius: colors.radius,
-              },
-            ]}
-          >
-            <Text style={[styles.planTabText, { color: selected === p.id ? "#FFF" : colors.foreground }]}>
-              {p.name}
-            </Text>
-            {p.isActive && <View style={[styles.activeDot, { backgroundColor: selected === p.id ? "#FFF" : colors.success }]} />}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Plan Hero Banner */}
-      <ImageBackground
-        source={HERO_WORKOUT}
-        style={styles.heroCard}
-        imageStyle={styles.heroImage}
-        resizeMode="cover"
-      >
-        <View style={styles.heroOverlay}>
-          <View style={styles.overviewHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.planName}>{plan.name}</Text>
-              <Text style={styles.planGoal}>{plan.goal}</Text>
-            </View>
-            {plan.isActive && <Badge label="Active" variant="success" />}
-          </View>
-          <View style={styles.planMeta}>
-            {[
-              { icon: "calendar" as const, label: plan.duration },
-              { icon: "zap" as const, label: `${plan.daysPerWeek}x / week` },
-              { icon: "bar-chart-2" as const, label: plan.level },
-            ].map((m) => (
-              <View key={m.label} style={styles.planMetaItem}>
-                <Feather name={m.icon} size={14} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.planMetaText}>{m.label}</Text>
-              </View>
-            ))}
-          </View>
-          <View style={[styles.trainerRow, { backgroundColor: "rgba(0,0,0,0.35)" }]}>
-            <Feather name="user" size={14} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.trainerText}>Trainer: {plan.trainer}</Text>
-          </View>
+      {loading ? (
+        <View style={{ paddingTop: 60, alignItems: "center" }}>
+          <ActivityIndicator color={colors.primary} size="large" />
+          <Text style={[{ color: colors.mutedForeground, marginTop: 12, fontFamily: "Inter_400Regular" }]}>Loading plans...</Text>
         </View>
-      </ImageBackground>
+      ) : plans.length === 0 ? (
+        <View style={{ paddingTop: 60, alignItems: "center" }}>
+          <Feather name="activity" size={48} color={colors.mutedForeground} />
+          <Text style={[{ color: colors.mutedForeground, marginTop: 12, fontFamily: "Inter_400Regular" }]}>No workout plans available</Text>
+        </View>
+      ) : (
+        <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.planTabs}>
+            {plans.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                onPress={() => setSelected(p.id)}
+                style={[
+                  styles.planTab,
+                  {
+                    backgroundColor: selected === p.id ? colors.primary : colors.card,
+                    borderColor: selected === p.id ? colors.primary : colors.border,
+                    borderRadius: colors.radius,
+                  },
+                ]}
+              >
+                <Text style={[styles.planTabText, { color: selected === p.id ? "#FFF" : colors.foreground }]}>
+                  {p.name}
+                </Text>
+                {p.isActive && <View style={[styles.activeDot, { backgroundColor: selected === p.id ? "#FFF" : colors.success }]} />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-      {/* Exercises */}
-      <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-        Exercises ({plan.exercises.length})
-      </Text>
-      {plan.exercises.map((ex, i) => (
-        <Card key={i} style={styles.exCard}>
-          <View style={styles.exRow}>
-            <View style={[styles.exNum, { backgroundColor: colors.primary + "15" }]}>
-              <Text style={[styles.exNumText, { color: colors.primary }]}>{i + 1}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.exName, { color: colors.foreground }]}>{ex.name}</Text>
-              <View style={styles.exMeta}>
-                <View style={[styles.exBadge, { backgroundColor: colors.muted }]}>
-                  <Text style={[styles.exBadgeText, { color: colors.mutedForeground }]}>{ex.sets} sets</Text>
+          {plan && (
+            <>
+              <ImageBackground
+                source={HERO_WORKOUT}
+                style={styles.heroCard}
+                imageStyle={styles.heroImage}
+                resizeMode="cover"
+              >
+                <View style={styles.heroOverlay}>
+                  <View style={styles.overviewHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.planName}>{plan.name}</Text>
+                      <Text style={styles.planGoal}>{plan.goal}</Text>
+                    </View>
+                    {plan.isActive && <Badge label="Active" variant="success" />}
+                  </View>
+                  <View style={styles.planMeta}>
+                    {[
+                      { icon: "calendar" as const, label: plan.duration },
+                      { icon: "zap" as const, label: `${plan.daysPerWeek}x / week` },
+                      { icon: "bar-chart-2" as const, label: plan.level },
+                    ].map((m) => (
+                      <View key={m.label} style={styles.planMetaItem}>
+                        <Feather name={m.icon} size={14} color="rgba(255,255,255,0.8)" />
+                        <Text style={styles.planMetaText}>{m.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {plan.trainer ? (
+                    <View style={[styles.trainerRow, { backgroundColor: "rgba(0,0,0,0.35)" }]}>
+                      <Feather name="user" size={14} color="rgba(255,255,255,0.9)" />
+                      <Text style={styles.trainerText}>Trainer: {plan.trainer}</Text>
+                    </View>
+                  ) : null}
                 </View>
-                <View style={[styles.exBadge, { backgroundColor: colors.muted }]}>
-                  <Text style={[styles.exBadgeText, { color: colors.mutedForeground }]}>{ex.reps} reps</Text>
+              </ImageBackground>
+
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                Exercises ({plan.exercises?.length || 0})
+              </Text>
+              {(plan.exercises || []).map((ex: any, i: number) => (
+                <Card key={ex.id || i} style={styles.exCard}>
+                  <View style={styles.exRow}>
+                    <View style={[styles.exNum, { backgroundColor: colors.primary + "15" }]}>
+                      <Text style={[styles.exNumText, { color: colors.primary }]}>{i + 1}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.exName, { color: colors.foreground }]}>{ex.name}</Text>
+                      <View style={styles.exMeta}>
+                        <View style={[styles.exBadge, { backgroundColor: colors.muted }]}>
+                          <Text style={[styles.exBadgeText, { color: colors.mutedForeground }]}>{ex.sets} sets</Text>
+                        </View>
+                        <View style={[styles.exBadge, { backgroundColor: colors.muted }]}>
+                          <Text style={[styles.exBadgeText, { color: colors.mutedForeground }]}>{ex.reps} reps</Text>
+                        </View>
+                        <View style={[styles.exBadge, { backgroundColor: colors.muted }]}>
+                          <Text style={[styles.exBadgeText, { color: colors.mutedForeground }]}>Rest {ex.rest}</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+                  </View>
+                </Card>
+              ))}
+              {(!plan.exercises || plan.exercises.length === 0) && (
+                <View style={{ paddingVertical: 32, alignItems: "center" }}>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>No exercises added yet</Text>
                 </View>
-                <View style={[styles.exBadge, { backgroundColor: colors.muted }]}>
-                  <Text style={[styles.exBadgeText, { color: colors.mutedForeground }]}>Rest {ex.rest}</Text>
-                </View>
-              </View>
-            </View>
-            <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-          </View>
-        </Card>
-      ))}
+              )}
+            </>
+          )}
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -131,10 +169,7 @@ const styles = StyleSheet.create({
   activeDot: { width: 6, height: 6, borderRadius: 3 },
   heroCard: { borderRadius: 16, overflow: "hidden", marginBottom: 24 },
   heroImage: { borderRadius: 16 },
-  heroOverlay: {
-    backgroundColor: "rgba(0,0,0,0.55)",
-    padding: 20,
-  },
+  heroOverlay: { backgroundColor: "rgba(0,0,0,0.55)", padding: 20 },
   overviewHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
   planName: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 22 },
   planGoal: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 4 },

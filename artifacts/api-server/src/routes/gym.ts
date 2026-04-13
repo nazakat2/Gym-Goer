@@ -1,6 +1,14 @@
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
+import { db } from "@workspace/db";
+import {
+  appAnnouncementsTable, appClassesTable, appClassBookingsTable,
+  appWorkoutPlansTable, appWorkoutExercisesTable,
+  appDietPlansTable, appDietMealsTable,
+  appOnboardingSlidesTable,
+} from "@workspace/db";
+import { eq, asc, desc } from "drizzle-orm";
 
 const router = Router();
 const SECRET = process.env["SESSION_SECRET"] || "gym_secret_key_2026";
@@ -284,47 +292,140 @@ router.post("/attendance/checkin", auth, (_req, res) => {
   return res.json({ message: "Checked in successfully", time: new Date().toISOString() });
 });
 
-// ─── Workout Plans ─────────────────────────────────────────────────────────
-router.get("/workout-plans", auth, (_req, res) => {
-  return res.json([
-    { id: "w1", name: "Strength Builder", level: "Intermediate", duration: "8 weeks", daysPerWeek: 4, isActive: true },
-    { id: "w2", name: "Fat Burn HIIT", level: "Advanced", duration: "4 weeks", daysPerWeek: 5, isActive: false },
-  ]);
+// ─── Announcements ─────────────────────────────────────────────────────────
+router.get("/announcements", auth, async (_req, res) => {
+  try {
+    const rows = await db.select().from(appAnnouncementsTable)
+      .where(eq(appAnnouncementsTable.isActive, true))
+      .orderBy(desc(appAnnouncementsTable.createdAt));
+    return res.json(rows);
+  } catch { return res.json([]); }
 });
 
-router.get("/workout-plans/:id", auth, (req, res) => {
-  return res.json({ id: req.params.id, name: "Strength Builder", level: "Intermediate" });
+// ─── Onboarding Slides ─────────────────────────────────────────────────────
+router.get("/onboarding-slides", async (_req, res) => {
+  try {
+    const rows = await db.select().from(appOnboardingSlidesTable)
+      .where(eq(appOnboardingSlidesTable.isActive, true))
+      .orderBy(asc(appOnboardingSlidesTable.order));
+    return res.json(rows);
+  } catch { return res.json([]); }
+});
+
+// ─── Workout Plans ─────────────────────────────────────────────────────────
+router.get("/workout-plans", auth, async (_req, res) => {
+  try {
+    const plans = await db.select().from(appWorkoutPlansTable)
+      .where(eq(appWorkoutPlansTable.isActive, true))
+      .orderBy(asc(appWorkoutPlansTable.id));
+    const result = await Promise.all(plans.map(async (plan) => {
+      const exercises = await db.select().from(appWorkoutExercisesTable)
+        .where(eq(appWorkoutExercisesTable.planId, plan.id))
+        .orderBy(asc(appWorkoutExercisesTable.order));
+      return { ...plan, exercises };
+    }));
+    return res.json(result);
+  } catch { return res.json([]); }
+});
+
+router.get("/workout-plans/:id", auth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [plan] = await db.select().from(appWorkoutPlansTable).where(eq(appWorkoutPlansTable.id, id));
+    if (!plan) return res.status(404).json({ message: "Plan not found" });
+    const exercises = await db.select().from(appWorkoutExercisesTable)
+      .where(eq(appWorkoutExercisesTable.planId, id))
+      .orderBy(asc(appWorkoutExercisesTable.order));
+    return res.json({ ...plan, exercises });
+  } catch { return res.status(500).json({ message: "Server error" }); }
 });
 
 // ─── Diet Plans ────────────────────────────────────────────────────────────
-router.get("/diet-plans", auth, (_req, res) => {
-  return res.json([
-    { id: "d1", name: "High Protein Bulk", calories: 3200, protein: 180, carbs: 350, fat: 90, isActive: true },
-  ]);
+router.get("/diet-plans", auth, async (_req, res) => {
+  try {
+    const plans = await db.select().from(appDietPlansTable)
+      .where(eq(appDietPlansTable.isActive, true))
+      .orderBy(asc(appDietPlansTable.id));
+    const result = await Promise.all(plans.map(async (plan) => {
+      const meals = await db.select().from(appDietMealsTable)
+        .where(eq(appDietMealsTable.planId, plan.id))
+        .orderBy(asc(appDietMealsTable.order));
+      return { ...plan, meals };
+    }));
+    return res.json(result);
+  } catch { return res.json([]); }
 });
 
-router.get("/diet-plans/:id", auth, (req, res) => {
-  return res.json({ id: req.params.id, name: "High Protein Bulk", calories: 3200 });
+router.get("/diet-plans/:id", auth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [plan] = await db.select().from(appDietPlansTable).where(eq(appDietPlansTable.id, id));
+    if (!plan) return res.status(404).json({ message: "Plan not found" });
+    const meals = await db.select().from(appDietMealsTable)
+      .where(eq(appDietMealsTable.planId, id))
+      .orderBy(asc(appDietMealsTable.order));
+    return res.json({ ...plan, meals });
+  } catch { return res.status(500).json({ message: "Server error" }); }
 });
 
 // ─── Classes ───────────────────────────────────────────────────────────────
-router.get("/classes", auth, (_req, res) => {
-  return res.json([
-    { id: "c1", name: "Power Yoga", instructor: "Lisa Park", time: "7:00 AM", date: "2026-04-14", duration: 60, capacity: 20, enrolled: 15, isBooked: false },
-    { id: "c2", name: "CrossFit WOD", instructor: "Marcus Reid", time: "6:00 AM", date: "2026-04-14", duration: 45, capacity: 15, enrolled: 14, isBooked: true },
-  ]);
+router.get("/classes", auth, async (req: any, res) => {
+  try {
+    const classes = await db.select().from(appClassesTable)
+      .where(eq(appClassesTable.isActive, true))
+      .orderBy(asc(appClassesTable.date), asc(appClassesTable.time));
+    const bookings = await db.select().from(appClassBookingsTable)
+      .where(eq(appClassBookingsTable.memberEmail, req.userId || ""));
+    const bookedIds = new Set(bookings.filter(b => b.status === "confirmed").map(b => b.classId));
+    const result = classes.map(c => ({
+      ...c, isBooked: bookedIds.has(c.id),
+      bookingId: bookings.find(b => b.classId === c.id && b.status === "confirmed")?.id || null,
+    }));
+    return res.json(result);
+  } catch { return res.json([]); }
 });
 
-router.post("/classes/book", auth, (_req, res) => {
-  return res.json({ message: "Class booked successfully" });
+router.post("/classes/book", auth, async (req: any, res) => {
+  try {
+    const { classId } = req.body;
+    const id = parseInt(classId);
+    const [cls] = await db.select().from(appClassesTable).where(eq(appClassesTable.id, id));
+    if (!cls) return res.status(404).json({ message: "Class not found" });
+    if (cls.enrolled >= cls.capacity) return res.status(400).json({ message: "Class is full" });
+    const existing = await db.select().from(appClassBookingsTable)
+      .where(eq(appClassBookingsTable.classId, id));
+    if (existing.some(b => b.memberEmail === req.userId && b.status === "confirmed")) {
+      return res.status(409).json({ message: "Already booked" });
+    }
+    const [booking] = await db.insert(appClassBookingsTable).values({
+      classId: id, memberEmail: req.userId, status: "confirmed",
+    }).returning();
+    await db.update(appClassesTable).set({ enrolled: cls.enrolled + 1 }).where(eq(appClassesTable.id, id));
+    return res.json({ message: "Class booked successfully", booking });
+  } catch { return res.status(500).json({ message: "Booking failed" }); }
 });
 
-router.get("/classes/bookings", auth, (_req, res) => {
-  return res.json([{ id: "b1", classId: "c2", className: "CrossFit WOD", date: "2026-04-14" }]);
+router.get("/classes/bookings", auth, async (req: any, res) => {
+  try {
+    const bookings = await db.select().from(appClassBookingsTable)
+      .where(eq(appClassBookingsTable.memberEmail, req.userId));
+    return res.json(bookings);
+  } catch { return res.json([]); }
 });
 
-router.delete("/classes/bookings/:id", auth, (_req, res) => {
-  return res.json({ message: "Booking cancelled" });
+router.delete("/classes/bookings/:id", auth, async (req: any, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [booking] = await db.select().from(appClassBookingsTable).where(eq(appClassBookingsTable.id, id));
+    if (booking) {
+      await db.update(appClassBookingsTable).set({ status: "cancelled" }).where(eq(appClassBookingsTable.id, id));
+      const [cls] = await db.select().from(appClassesTable).where(eq(appClassesTable.id, booking.classId));
+      if (cls && cls.enrolled > 0) {
+        await db.update(appClassesTable).set({ enrolled: cls.enrolled - 1 }).where(eq(appClassesTable.id, booking.classId));
+      }
+    }
+    return res.json({ message: "Booking cancelled" });
+  } catch { return res.status(500).json({ message: "Cancel failed" }); }
 });
 
 // ─── Notifications ─────────────────────────────────────────────────────────

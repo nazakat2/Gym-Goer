@@ -161,6 +161,18 @@ class ApiService {
   async contactSupport(name: string, message: string) {
     return this.request("/support/contact", "POST", { name, message });
   }
+
+  async getAnnouncements() {
+    return this.request<any[]>("/announcements");
+  }
+
+  async getOnboardingSlides() {
+    try {
+      const res = await fetch(`${BASE_URL}/onboarding-slides`);
+      if (!res.ok) return [];
+      return res.json();
+    } catch { return []; }
+  }
 }
 
 export const apiService = new ApiService();

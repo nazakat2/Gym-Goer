@@ -55,11 +55,19 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
   - Admin Users — view system users and permissions
   - Notifications — read/mark-read with type icons
   - Business Settings — gym info, membership fees, operating hours
-  - POS & Sales — placeholder (coming soon)
+  - POS & Sales — full two-tab UI: POS Terminal (cart, member search, discount, 4 payment methods, receipt) + Sales History (collect payment, refunds)
+  - Mobile Content — control all mobile app screens from admin (5 tabs below)
+    - Announcements — banners shown on member home screen (type: info/promo/warning, active toggle)
+    - Classes — full schedule management (add/edit/delete, capacity, instructor, location)
+    - Workout Plans — create plans with exercises (sets/reps/rest), toggle active
+    - Diet Plans — create plans with meals (macros, food items, calories per meal)
+    - Onboarding Slides — edit title/subtitle/description for each of the 3 intro slides
 
 ### API Server
 - **Path**: `artifacts/api-server/`
 - **Routes**: `gym.ts` (member app), `gym-admin.ts` (admin panel)
 - **Route order**: gymAdminRouter BEFORE gymRouter (avoids auth middleware conflicts on shared paths like /attendance)
-- **DB Tables**: members, measurements, attendance, employees, invoices, suppliers, products, sales, accounts, vouchers, admin_users, admin_notifications, business_settings
-- **Seed data**: 6 members, 3 employees, 2 suppliers, 5 products, 5 invoices, 7 attendance records, 5 accounts, 4 notifications, 2 admin users
+- **DB Tables**: members, measurements, attendance, employees, invoices, suppliers, products, sales, pos_orders, pos_order_items, accounts, vouchers, admin_users, admin_notifications, business_settings, app_announcements, app_classes, app_class_bookings, app_workout_plans, app_workout_exercises, app_diet_plans, app_diet_meals, app_onboarding_slides
+- **Admin content routes**: `/app-content/*` — full CRUD for all mobile app content
+- **Mobile content routes**: `/announcements`, `/onboarding-slides`, `/workout-plans`, `/diet-plans`, `/classes` — serve real DB data to mobile app
+- **Seed data**: 6 members, 3 employees, 2 suppliers, 5 products, 5 invoices, 7 attendance records, 5 accounts, 4 notifications, 2 admin users, 3 announcements, 5 classes, 2 workout plans (10 exercises), 2 diet plans (8 meals), 3 onboarding slides

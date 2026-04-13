@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Platform,
   RefreshControl,
@@ -26,12 +26,14 @@ import {
   DUMMY_MEMBERSHIP,
 } from "@/utils/dummyData";
 import { formatDate, getDaysUntil } from "@/utils/helpers";
+import { apiService } from "@/services/api";
 
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const unreadCount = DUMMY_NOTIFICATIONS.filter((n) => !n.read).length;
@@ -40,9 +42,29 @@ export default function HomeScreen() {
   const upcomingClass = DUMMY_CLASSES.find((c) => c.isBooked);
   const thisMonthAttendance = DUMMY_ATTENDANCE.length;
 
-  const onRefresh = () => {
+  useEffect(() => {
+    loadAnnouncements();
+  }, []);
+
+  const loadAnnouncements = async () => {
+    try {
+      const data = await apiService.getAnnouncements();
+      setAnnouncements(data || []);
+    } catch {
+      setAnnouncements([]);
+    }
+  };
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    await loadAnnouncements();
+    setRefreshing(false);
+  };
+
+  const ANNOUNCE_COLORS: Record<string, { bg: string; border: string; icon: string }> = {
+    promo: { bg: "#6D28D9", border: "#7C3AED", icon: "tag" },
+    warning: { bg: "#D97706", border: "#F59E0B", icon: "alert-triangle" },
+    info: { bg: "#0369A1", border: "#0284C7", icon: "info" },
   };
 
   return (
@@ -140,6 +162,28 @@ export default function HomeScreen() {
         ))}
       </View>
 
+      {/* Announcements */}
+      {announcements.length > 0 && (
+        <>
+          <SectionHeader title="Announcements" />
+          {announcements.map((a: any) => {
+            const ac = ANNOUNCE_COLORS[a.type] || ANNOUNCE_COLORS.info;
+            return (
+              <View key={a.id} style={[styles.announceCard, { backgroundColor: ac.bg + "15", borderColor: ac.border + "40", borderWidth: 1 }]}>
+                <View style={[styles.announceIcon, { backgroundColor: ac.bg }]}>
+                  <Feather name={ac.icon as any} size={14} color="#FFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.announceTitle, { color: colors.foreground }]}>{a.title}</Text>
+                  <Text style={[styles.announceBody, { color: colors.mutedForeground }]}>{a.body}</Text>
+                </View>
+              </View>
+            );
+          })}
+          <View style={{ marginBottom: 8 }} />
+        </>
+      )}
+
       {/* Upcoming Class */}
       {upcomingClass && (
         <>
@@ -228,4 +272,8 @@ const styles = StyleSheet.create({
   attendanceDate: { fontFamily: "Inter_600SemiBold", fontSize: 14 },
   attendanceSub: { fontFamily: "Inter_400Regular", fontSize: 13, marginTop: 2 },
   attendanceDuration: { fontFamily: "Inter_700Bold", fontSize: 15 },
+  announceCard: { flexDirection: "row", gap: 12, padding: 14, borderRadius: 12, marginBottom: 10, alignItems: "flex-start" },
+  announceIcon: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  announceTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14, marginBottom: 2 },
+  announceBody: { fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 18 },
 });
