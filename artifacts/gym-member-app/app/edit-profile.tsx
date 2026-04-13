@@ -41,53 +41,49 @@ export default function EditProfileScreen() {
     return Object.keys(e).length === 0;
   };
 
-  const handlePickPhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "Please allow access to your photo library to change your profile picture."
-      );
-      return;
+  const openLibrary = async () => {
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Required", "Please allow access to your photo library.");
+        return;
+      }
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
-
     if (!result.canceled && result.assets.length > 0) {
       setAvatar(result.assets[0].uri);
     }
   };
 
-  const handleTakePhoto = async () => {
+  const openCamera = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "Please allow camera access to take a profile picture."
-      );
+      Alert.alert("Permission Required", "Please allow camera access.");
       return;
     }
-
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
-
     if (!result.canceled && result.assets.length > 0) {
       setAvatar(result.assets[0].uri);
     }
   };
 
   const handleChangePhoto = () => {
+    if (Platform.OS === "web") {
+      openLibrary();
+      return;
+    }
     Alert.alert("Change Profile Photo", "Choose an option", [
-      { text: "Take Photo", onPress: handleTakePhoto },
-      { text: "Choose from Library", onPress: handlePickPhoto },
+      { text: "Take Photo", onPress: openCamera },
+      { text: "Choose from Library", onPress: openLibrary },
       { text: "Remove Photo", style: "destructive", onPress: () => setAvatar(null) },
       { text: "Cancel", style: "cancel" },
     ]);
@@ -128,18 +124,18 @@ export default function EditProfileScreen() {
           <View style={{ width: 24 }} />
         </View>
 
-        {/* Avatar with camera button */}
+        {/* Avatar with camera overlay */}
         <View style={styles.avatarSection}>
-          <View>
+          <TouchableOpacity
+            onPress={handleChangePhoto}
+            activeOpacity={0.8}
+            style={styles.avatarWrapper}
+          >
             <Avatar name={name || "Member"} uri={avatar} size={100} />
-            <TouchableOpacity
-              onPress={handleChangePhoto}
-              style={[styles.cameraBtn, { backgroundColor: colors.primary }]}
-              activeOpacity={0.85}
-            >
-              <Feather name="camera" size={15} color="#FFF" />
-            </TouchableOpacity>
-          </View>
+            <View style={[styles.cameraOverlay, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
+              <Feather name="camera" size={22} color="#FFF" />
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity onPress={handleChangePhoto} activeOpacity={0.7}>
             <Text style={[styles.changePhotoText, { color: colors.primary }]}>Change Photo</Text>
           </TouchableOpacity>
@@ -199,18 +195,21 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   screenTitle: { fontFamily: "Inter_700Bold", fontSize: 18 },
-  avatarSection: { alignItems: "center", marginBottom: 32, gap: 12 },
-  cameraBtn: {
+  avatarSection: { alignItems: "center", marginBottom: 32, gap: 10 },
+  avatarWrapper: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    overflow: "hidden",
+  },
+  cameraOverlay: {
     position: "absolute",
     bottom: 0,
+    left: 0,
     right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#FFF",
   },
   changePhotoText: { fontFamily: "Inter_500Medium", fontSize: 14 },
   divider: { height: 1, marginVertical: 20 },
