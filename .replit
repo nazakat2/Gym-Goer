@@ -51,7 +51,6 @@ externalPort = 5000
 
 [userenv.shared]
 EMAIL_USER = "mrsarimofficial@gmail.com"
-GITHUB_TOKEN = "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"
 
 [nix]
 channel = "stable-25_05"
