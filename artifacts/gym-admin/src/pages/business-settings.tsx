@@ -81,7 +81,7 @@ export default function BusinessSettings() {
         <CardContent className="grid gap-4">
           <div className="grid gap-2">
             <Label>Gym Name</Label>
-            <Input value={form.gymName} onChange={(e) => setForm(f => ({ ...f, gymName: e.target.value }))} placeholder="FitPro Gym" />
+            <Input value={form.gymName} onChange={(e) => setForm(f => ({ ...f, gymName: e.target.value }))} placeholder="Core X Gym" />
           </div>
           <div className="grid gap-2">
             <Label>Address</Label>
