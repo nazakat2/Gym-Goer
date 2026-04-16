@@ -67,7 +67,7 @@ export default function AddMember() {
   const [plan, setPlan] = useState("monthly");
   const [planStartDate, setPlanStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [fitnessGoal, setFitnessGoal] = useState("general");
-  const [trainerId, setTrainerId] = useState("");
+  const [trainerId, setTrainerId] = useState("none");
   const [referralSource, setReferralSource] = useState("");
 
   // Health
@@ -103,7 +103,7 @@ export default function AddMember() {
         emergencyContactPhone: emergencyPhone || null,
         plan, planStartDate,
         fitnessGoal, referralSource: referralSource || null,
-        assignedTrainerId: trainerId ? parseInt(trainerId) : null,
+        assignedTrainerId: (trainerId && trainerId !== "none") ? parseInt(trainerId) : null,
         photoUrl: photoPreview || null,
       });
 
@@ -301,11 +301,8 @@ export default function AddMember() {
                 <Select value={trainerId} onValueChange={setTrainerId}>
                   <SelectTrigger><SelectValue placeholder="No trainer assigned" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No trainer</SelectItem>
-                    {trainers.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
-                    {employees?.filter(e => !["trainer", "Trainer"].includes(e.role)).slice(0,5).map(e =>
-                      <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.role})</SelectItem>
-                    )}
+                    <SelectItem value="none">No trainer assigned</SelectItem>
+                    {(employees || []).map(e => <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.role})</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

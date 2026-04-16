@@ -60,7 +60,7 @@ export default function MemberDetail() {
   const [editEmergencyPhone, setEditEmergencyPhone] = useState("");
   const [editFitnessGoal, setEditFitnessGoal] = useState("");
   const [editReferral, setEditReferral] = useState("");
-  const [editTrainerId, setEditTrainerId] = useState("");
+  const [editTrainerId, setEditTrainerId] = useState("none");
   const [editPlan, setEditPlan] = useState("");
   const [editPlanStart, setEditPlanStart] = useState("");
 
@@ -125,7 +125,7 @@ export default function MemberDetail() {
     setEditEmergencyPhone((member as any).emergencyContactPhone || "");
     setEditFitnessGoal((member as any).fitnessGoal || "general");
     setEditReferral((member as any).referralSource || "");
-    setEditTrainerId(String((member as any).assignedTrainerId || ""));
+    setEditTrainerId((member as any).assignedTrainerId ? String((member as any).assignedTrainerId) : "none");
     setEditPlan(member.plan);
     setEditPlanStart(member.planStartDate);
 
@@ -156,7 +156,7 @@ export default function MemberDetail() {
           city: editCity, area: editArea, address: editAddress,
           emergencyContactName: editEmergencyName, emergencyContactPhone: editEmergencyPhone,
           fitnessGoal: editFitnessGoal, referralSource: editReferral,
-          assignedTrainerId: editTrainerId || null,
+          assignedTrainerId: (editTrainerId && editTrainerId !== "none") ? editTrainerId : null,
           plan: editPlan, planStartDate: editPlanStart,
         }),
       });
