@@ -9,6 +9,7 @@ import {
   businessSettingsTable,
   appAnnouncementsTable, appClassesTable, appWorkoutPlansTable, appWorkoutExercisesTable,
   appDietPlansTable, appDietMealsTable, appOnboardingSlidesTable,
+  memberHealthTable, memberNotesTable, membershipHistoryTable,
 } from "@workspace/db";
 import { eq, desc, asc, and, like, or, sql, gte, lte, count } from "drizzle-orm";
 import { otpsTable } from "@workspace/db";
@@ -334,29 +335,44 @@ router.get("/members", async (req, res) => {
 });
 
 router.post("/members", async (req, res) => {
-  const { name, phone, cnic, address, photoUrl, plan, planStartDate } = req.body;
+  const {
+    name, phone, whatsapp, email, gender, dob, cnic, city, area, address, bloodGroup,
+    emergencyContactName, emergencyContactPhone, fitnessGoal, referralSource,
+    photoUrl, plan, planStartDate, assignedTrainerId,
+  } = req.body;
   const planExpiryDate = calcExpiry(planStartDate, plan);
   const [member] = await db.insert(membersTable).values({
-    name, phone, cnic, address: address || null, photoUrl: photoUrl || null,
+    name, phone, whatsapp: whatsapp || null, email: email || null,
+    gender: gender || "male", dob: dob || null, cnic,
+    city: city || null, area: area || null, address: address || null,
+    bloodGroup: bloodGroup || null,
+    emergencyContactName: emergencyContactName || null,
+    emergencyContactPhone: emergencyContactPhone || null,
+    fitnessGoal: fitnessGoal || "general",
+    referralSource: referralSource || null,
+    photoUrl: photoUrl || null,
     plan, planStartDate, planExpiryDate, status: "active",
+    assignedTrainerId: assignedTrainerId ? parseInt(assignedTrainerId) : null,
   }).returning();
 
   // Auto-create invoice
-  const planPrices: Record<string, number> = { monthly: 3000, quarterly: 8000, yearly: 28000 };
+  const planPrices: Record<string, number> = { daily: 200, weekly: 800, monthly: 3000, quarterly: 8000, yearly: 28000 };
   await db.insert(invoicesTable).values({
     memberId: member.id,
     amount: String(planPrices[plan] || 3000),
-    plan,
-    dueDate: planStartDate,
-    status: "unpaid",
+    plan, dueDate: planStartDate, status: "unpaid",
+  });
+
+  // Log membership history
+  await db.insert(membershipHistoryTable).values({
+    memberId: member.id, plan, startDate: planStartDate, expiryDate: planExpiryDate,
+    amount: String(planPrices[plan] || 3000), status: "active",
   });
 
   // Create notification
   await db.insert(adminNotificationsTable).values({
-    type: "new_member",
-    title: "New Member Registered",
-    message: `${name} has joined on the ${plan} plan.`,
-    read: false,
+    type: "new_member", title: "New Member Registered",
+    message: `${name} has joined on the ${plan} plan.`, read: false,
   });
 
   res.status(201).json(member);
@@ -373,13 +389,47 @@ router.get("/members/:id", async (req, res) => {
 
 router.put("/members/:id", async (req, res) => {
   const id = parseInt(req.params.id);
-  const { name, phone, cnic, address, photoUrl, plan, planStartDate } = req.body;
-  const planExpiryDate = calcExpiry(planStartDate, plan);
+  const {
+    name, phone, whatsapp, email, gender, dob, cnic, city, area, address, bloodGroup,
+    emergencyContactName, emergencyContactPhone, fitnessGoal, referralSource,
+    photoUrl, plan, planStartDate, assignedTrainerId, status, blacklisted,
+  } = req.body;
+
+  const existing = await db.select().from(membersTable).where(eq(membersTable.id, id)).limit(1);
+  if (!existing[0]) return res.status(404).json({ message: "Member not found" });
+
+  const planChanged = plan && plan !== existing[0].plan;
+  const planExpiryDate = plan ? calcExpiry(planStartDate || existing[0].planStartDate, plan) : existing[0].planExpiryDate;
+
   const [updated] = await db.update(membersTable).set({
-    name, phone, cnic, address: address || null, photoUrl: photoUrl || null,
-    plan, planStartDate, planExpiryDate,
+    ...(name && { name }), ...(phone && { phone }),
+    whatsapp: whatsapp ?? existing[0].whatsapp,
+    email: email ?? existing[0].email,
+    gender: gender ?? existing[0].gender,
+    dob: dob ?? existing[0].dob,
+    ...(cnic && { cnic }),
+    city: city ?? existing[0].city, area: area ?? existing[0].area,
+    address: address ?? existing[0].address, bloodGroup: bloodGroup ?? existing[0].bloodGroup,
+    emergencyContactName: emergencyContactName ?? existing[0].emergencyContactName,
+    emergencyContactPhone: emergencyContactPhone ?? existing[0].emergencyContactPhone,
+    fitnessGoal: fitnessGoal ?? existing[0].fitnessGoal,
+    referralSource: referralSource ?? existing[0].referralSource,
+    photoUrl: photoUrl ?? existing[0].photoUrl,
+    ...(plan && { plan, planStartDate: planStartDate || existing[0].planStartDate, planExpiryDate }),
+    ...(assignedTrainerId !== undefined && { assignedTrainerId: assignedTrainerId ? parseInt(assignedTrainerId) : null }),
+    ...(status && { status }),
+    ...(blacklisted !== undefined && { blacklisted }),
   }).where(eq(membersTable.id, id)).returning();
-  if (!updated) return res.status(404).json({ message: "Member not found" });
+
+  // Log membership history if plan changed
+  if (planChanged && plan && planStartDate) {
+    const planPrices: Record<string, number> = { daily: 200, weekly: 800, monthly: 3000, quarterly: 8000, yearly: 28000 };
+    await db.insert(membershipHistoryTable).values({
+      memberId: id, plan, startDate: planStartDate, expiryDate: planExpiryDate,
+      amount: String(planPrices[plan] || 3000), status: "active", notes: "Plan renewed/changed",
+    });
+  }
+
   res.json(updated);
 });
 
@@ -387,6 +437,121 @@ router.delete("/members/:id", async (req, res) => {
   const id = parseInt(req.params.id);
   await db.delete(membersTable).where(eq(membersTable.id, id));
   res.json({ message: "Member deleted" });
+});
+
+// ── Member Health ──────────────────────────────────────────────────────────
+router.get("/members/:id/health", async (req, res) => {
+  const memberId = parseInt(req.params.id);
+  const [health] = await db.select().from(memberHealthTable).where(eq(memberHealthTable.memberId, memberId));
+  res.json(health || { memberId, conditions: [], allergies: "", medicalHistory: "", doctorRecommendations: "", currentMedications: "" });
+});
+
+router.put("/members/:id/health", async (req, res) => {
+  const memberId = parseInt(req.params.id);
+  const { conditions, allergies, medicalHistory, doctorRecommendations, currentMedications } = req.body;
+  const [existing] = await db.select().from(memberHealthTable).where(eq(memberHealthTable.memberId, memberId));
+  if (existing) {
+    const [updated] = await db.update(memberHealthTable).set({
+      conditions: conditions || [], allergies: allergies || null,
+      medicalHistory: medicalHistory || null, doctorRecommendations: doctorRecommendations || null,
+      currentMedications: currentMedications || null, updatedAt: new Date(),
+    }).where(eq(memberHealthTable.memberId, memberId)).returning();
+    return res.json(updated);
+  }
+  const [created] = await db.insert(memberHealthTable).values({
+    memberId, conditions: conditions || [], allergies: allergies || null,
+    medicalHistory: medicalHistory || null, doctorRecommendations: doctorRecommendations || null,
+    currentMedications: currentMedications || null,
+  }).returning();
+  res.status(201).json(created);
+});
+
+// ── Member Notes ───────────────────────────────────────────────────────────
+router.get("/members/:id/notes", async (req, res) => {
+  const memberId = parseInt(req.params.id);
+  const notes = await db.select().from(memberNotesTable)
+    .where(eq(memberNotesTable.memberId, memberId))
+    .orderBy(desc(memberNotesTable.createdAt));
+  res.json(notes);
+});
+
+router.post("/members/:id/notes", async (req, res) => {
+  const memberId = parseInt(req.params.id);
+  const { note, type, createdBy } = req.body;
+  const [created] = await db.insert(memberNotesTable).values({
+    memberId, note, type: type || "admin", createdBy: createdBy || "Admin",
+  }).returning();
+  res.status(201).json(created);
+});
+
+router.delete("/members/:id/notes/:noteId", async (req, res) => {
+  await db.delete(memberNotesTable).where(eq(memberNotesTable.id, parseInt(req.params.noteId)));
+  res.json({ message: "Note deleted" });
+});
+
+// ── Membership History ─────────────────────────────────────────────────────
+router.get("/members/:id/membership-history", async (req, res) => {
+  const memberId = parseInt(req.params.id);
+  const history = await db.select().from(membershipHistoryTable)
+    .where(eq(membershipHistoryTable.memberId, memberId))
+    .orderBy(desc(membershipHistoryTable.createdAt));
+  res.json(history);
+});
+
+// ── Freeze / Unfreeze Membership ──────────────────────────────────────────
+router.post("/members/:id/freeze", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { freezeDays } = req.body;
+  const days = parseInt(freezeDays) || 7;
+  const frozenUntil = new Date();
+  frozenUntil.setDate(frozenUntil.getDate() + days);
+  const [updated] = await db.update(membersTable)
+    .set({ frozenUntil: frozenUntil.toISOString().split("T")[0], status: "frozen" })
+    .where(eq(membersTable.id, id)).returning();
+  res.json(updated);
+});
+
+router.post("/members/:id/unfreeze", async (req, res) => {
+  const id = parseInt(req.params.id);
+  const [updated] = await db.update(membersTable)
+    .set({ frozenUntil: null, status: "active" })
+    .where(eq(membersTable.id, id)).returning();
+  res.json(updated);
+});
+
+// ── Member-specific sub-resources ─────────────────────────────────────────
+router.get("/members/:id/attendance", async (req, res) => {
+  const memberId = parseInt(req.params.id);
+  const records = await db.select().from(attendanceTable)
+    .where(eq(attendanceTable.memberId, memberId))
+    .orderBy(desc(attendanceTable.date));
+  res.json(records);
+});
+
+router.get("/members/:id/invoices", async (req, res) => {
+  const memberId = parseInt(req.params.id);
+  const records = await db.select().from(invoicesTable)
+    .where(eq(invoicesTable.memberId, memberId))
+    .orderBy(desc(invoicesTable.createdAt));
+  res.json(records);
+});
+
+router.get("/members/:id/measurements", async (req, res) => {
+  const memberId = parseInt(req.params.id);
+  const records = await db.select().from(measurementsTable)
+    .where(eq(measurementsTable.memberId, memberId))
+    .orderBy(desc(measurementsTable.date));
+  res.json(records.map(r => ({
+    ...r,
+    weight: parseFloat(r.weight as string),
+    height: parseFloat(r.height as string),
+    bmi: parseFloat(r.bmi as string),
+    bodyFat: r.bodyFat ? parseFloat(r.bodyFat as string) : null,
+    chest: r.chest ? parseFloat(r.chest as string) : null,
+    waist: r.waist ? parseFloat(r.waist as string) : null,
+    arms: r.arms ? parseFloat(r.arms as string) : null,
+    hips: r.hips ? parseFloat(r.hips as string) : null,
+  })));
 });
 
 // ── Measurements ──────────────────────────────────────────────────────────
@@ -411,14 +576,22 @@ router.get("/measurements", async (req, res) => {
 });
 
 router.post("/measurements", async (req, res) => {
-  const { memberId, weight, height, bodyFat, date } = req.body;
+  const { memberId, weight, height, bodyFat, chest, waist, arms, hips, date, notes } = req.body;
   const bmi = calcBMI(weight, height);
   const [m] = await db.insert(measurementsTable).values({
     memberId, weight: String(weight), height: String(height),
-    bmi: String(bmi), bodyFat: bodyFat ? String(bodyFat) : null, date,
+    bmi: String(bmi), bodyFat: bodyFat ? String(bodyFat) : null,
+    chest: chest ? String(chest) : null, waist: waist ? String(waist) : null,
+    arms: arms ? String(arms) : null, hips: hips ? String(hips) : null,
+    date, notes: notes || null,
   }).returning();
   const [member] = await db.select().from(membersTable).where(eq(membersTable.id, memberId));
-  res.status(201).json({ ...m, memberName: member?.name ?? "Unknown", weight, height, bmi, bodyFat: bodyFat ?? null });
+  res.status(201).json({
+    ...m, memberName: member?.name ?? "Unknown",
+    weight: parseFloat(m.weight as string), height: parseFloat(m.height as string),
+    bmi: parseFloat(m.bmi as string), bodyFat: bodyFat ?? null,
+    chest: chest ?? null, waist: waist ?? null, arms: arms ?? null, hips: hips ?? null,
+  });
 });
 
 router.delete("/measurements/:id", async (req, res) => {

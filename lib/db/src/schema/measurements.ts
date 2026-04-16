@@ -10,7 +10,12 @@ export const measurementsTable = pgTable("measurements", {
   height: numeric("height", { precision: 5, scale: 1 }).notNull(),
   bmi: numeric("bmi", { precision: 4, scale: 1 }).notNull(),
   bodyFat: numeric("body_fat", { precision: 4, scale: 1 }),
+  chest: numeric("chest", { precision: 5, scale: 1 }),
+  waist: numeric("waist", { precision: 5, scale: 1 }),
+  arms: numeric("arms", { precision: 5, scale: 1 }),
+  hips: numeric("hips", { precision: 5, scale: 1 }),
   date: text("date").notNull(),
+  notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

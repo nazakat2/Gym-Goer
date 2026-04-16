@@ -1,0 +1,185 @@
+Member Management 
+🔹 1. Member Registration & Profile
+•	Full name, gender, age, DOB 
+•	Phone number + WhatsApp number 
+•	Email (optional) 
+•	CNIC / ID card (optional but useful) 
+•	Address (city, area) 
+•	Emergency contact details 
+•	Profile photo upload 
+🔹 2. Health & Medical Information
+•	Medical history (injuries, surgeries, conditions) 
+•	Current health  (physical & mental) issues (BP, diabetes, PCOs, thyroid etc.) 
+•	Allergies 
+•	Doctor recommendations (if any) 
+•	Fitness goal select: 
+o	Weight loss /Fat loss
+o	Muscle gain 
+o	General fitness 
+o	Strength & Endurance
+o	Cardio 
+🔹 3. Membership Management (Inside Member Profile)
+•	Plan assign (monthly /quartly/ yearly) 
+•	Start date / expiry date 
+•	Freeze membership option (pause for some days) 
+•	Upgrade / downgrade membership 
+•	Renewal history 
+•	Multiple memberships tracking (agar user ne bar bar join kiya ho) 
+🔹 4. Progress Tracking System
+•	Weight tracking (daily / weekly logs / monthly) 
+•	BMI auto calculation 
+•	Body measurements: 
+o	Chest 
+o	Waist 
+o	Arms 
+•	Before / After photos upload 
+•	Progress graphs (visual charts) 
+🔹 5. Attendance Summary (Per Member)
+•	Total visits count 
+•	Last check-in date 
+•	Attendance history (calendar view) 
+•	Missed days tracking 
+•	QR code / RFID / biometric check-in
+•	Daily attendence reports
+•	peak hours analysis / hourly attendance
+•	auto generate receipt
+🔹 6. Payment & Financial History
+•	automatic fee calculation
+•	Total paid amount 
+•	Pending dues tarcking
+•	Payment history (date-wise) 
+•	Invoice records 
+•	Discounts applied 
+•	Online line payments (jazz cash, easypaisa, bank acount integration)
+•	Invoice generation
+🔹 7. Trainer Assignment / staff management
+•	Assign specific trainer 
+•	Trainer profiles
+•	Trainer change history 
+•	Personal training sessions tracking 
+•	Assign clients
+•	Salary / commission tracking
+•	Auto generate commission to trainer
+•	Bonus 
+•	Trainer ratings
+🔹 8. Notes & Remarks System
+•	Trainer notes (e.g., “client knee pain hai”) 
+•	Admin remarks 
+•	Behavior / discipline notes 
+
+🔹 9. Notifications & Alerts (Per Member)
+•	Membership expiry alert 
+•	Payment due reminder 
+•	Class reminder 
+•	Custom notifications 
+•	Workout plan
+•	Diet plan
+•	Email Alerts
+•	SMS Alerts
+•	Gym announcement 
+🔹 10. Document Management
+•	Upload documents: 
+o	Medical reports 
+o	ID proof 
+o	Agreements 
+•	Digital waiver / terms acceptance 
+🔹 11. Access Control & Status
+•	Active / Inactive / Blocked member 
+•	Blacklist option (non-payment ya misconduct) 
+•	Re-activation system 
+🔹 12. Search & Filters (only for Admin )
+•	Search by name / phone 
+•	Filter by: 
+o	Active members 
+o	Expiring soon 
+o	Unpaid members 
+•	Quick actions (renew, call, message) 
+🔹 13. Referral & Source Tracking (Business Growth 💰)
+•	Member ne kis referral se join kiya 
+•	Campaign tracking (Facebook ad, walk-in, etc.) 
+•	Referral rewards system 
+🔹 14. Multi-Branch Support (Advanced/Premium)
+•	Member kis branch ka hai 
+•	Cross-branch access (optional)
+Classes & Schedule Management (Module)
+🔹 1. Class Creation & Setup
+•	Class name (e.g., CrossFit, Yoga) 
+•	Description (class ka purpose) 
+•	Trainer assign 
+•	Duration (30 min / 1 hour) 
+•	Difficulty level: 
+o	Beginner 
+o	Intermediate 
+o	Advanced 
+🔹 2. Types of Classes (Full Coverage)
+🔥 Strength & High-Intensity
+•	CrossFit 
+•	HIIT (High-Intensity Interval Training) 
+•	Bootcamp Training 
+•	Functional Training 
+•	Circuit Training 
+🧘 Mind & Flexibility
+•	Yoga (Hatha, Vinyasa, Power Yoga) 
+•	Pilates 
+•	Stretching / Mobility Classes 
+•	Meditation Sessions 
+💃 Cardio & Fun Classes
+•	Zumba 
+•	Dance Fitness 
+•	Aerobics 
+•	Step Aerobics 
+🏃 Endurance & Conditioning
+•	Cardio Training 
+•	Running Groups 
+•	Cycling / Spin Class 
+•	Endurance Training 
+🥊 Specialized Training
+•	Boxing Fitness 
+•	MMA Conditioning 
+•	Self-Defense Classes 
+🧑🤝🧑 Special Groups
+•	Women-only classes 
+•	Kids fitness classes 
+•	Senior citizen fitness 
+•	Weight loss programs 
+•	Rehabilitation classes 
+🔹 3. Schedule Management
+•	Weekly timetable create karna 
+•	Multiple time slots per day 
+•	Recurring classes (e.g., Mon–Fri same time) 
+•	Trainer availability check 
+•	Holiday / off-day settings 
+🔹 4. Class Booking System
+•	Members class book kar saken 
+•	Limited seats (capacity control) 
+•	Waitlist system 
+•	Cancel / reschedule option 
+🔹 5. Attendance for Classes
+•	Per class attendance 
+•	Trainer mark attendance 
+•	Auto attendance via QR (advanced) 
+•	No-show tracking 
+🔹 6. Trainer Controls
+•	Trainer apni classes dekh sakta hai 
+•	Attendance mark kar sakta hai 
+•	Notes add kar sakta hai 
+🔹 7. Notifications System
+•	Class reminder (before 1–2 hours) 
+•	Booking confirmation 
+•	Cancellation alerts 
+•	Schedule changes notification 
+🔹 8. Reports & Analytics
+•	Most popular classes 
+•	Attendance per class 
+•	Trainer performance 
+•	Peak timings 
+🔹 9. Membership Integration
+•	Kuch classes premium members ke liye lock 
+•	Pay-per-class option 
+•	Package-based classes (e.g., 10 yoga sessions) 
+🔹 10. Online / Hybrid Classes (Premium Feature 🔥)
+•	Zoom / Google Meet integration 
+•	Online booking 
+•	Recorded sessions access
+
+
