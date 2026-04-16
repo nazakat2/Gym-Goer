@@ -14,16 +14,25 @@ import {
 } from "recharts";
 import {
   FileBarChart, Users, DollarSign, CalendarCheck, Download, TrendingUp,
-  FileText, CreditCard, Activity,
+  FileText, CreditCard, Activity, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { format } from "date-fns";
+import { format, parse, addMonths, subMonths } from "date-fns";
 
 const PRIMARY = "#E31C25";
 const COLORS = ["#E31C25", "#22c55e", "#3b82f6", "#f59e0b", "#8b5cf6", "#06b6d4"];
 
-// ── PDF helpers ─────────────────────────────────────────────────────────
+// ── helpers ──────────────────────────────────────────────────────────────────
+function toMonthStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+function monthLabel(m: string) {
+  try { return format(parse(m + "-01", "yyyy-MM-dd", new Date()), "MMMM yyyy"); }
+  catch { return m; }
+}
+
+// ── PDF helpers ───────────────────────────────────────────────────────────────
 function addPdfHeader(doc: jsPDF, gymName: string, reportTitle: string, subtitle?: string) {
   const pw = doc.internal.pageSize.getWidth();
   doc.setFillColor(227, 28, 37);
@@ -77,60 +86,85 @@ function statBox(doc: jsPDF, x: number, y: number, w: number, label: string, val
   doc.setTextColor(0, 0, 0);
 }
 
-// ════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 export default function Reports() {
+  const [selectedMonth, setSelectedMonth] = useState(toMonthStr(new Date()));
+
   const { data: stats } = useGetDashboardStats();
-  const { data: attendanceReport } = useGetAttendanceReport();
+  const { data: attendanceReport } = useGetAttendanceReport({ month: selectedMonth });
   const { data: revenueChart } = useGetRevenueChart();
   const { data: members } = useListMembers();
   const { data: billing } = useListBilling();
-  const { data: financialReport } = useGetFinancialReport();
+  const { data: financialReport } = useGetFinancialReport({ month: selectedMonth });
   const { data: memberReport } = useGetMemberReport();
   const { data: bizSettings } = useGetBusinessSettings();
 
   const [downloading, setDownloading] = useState<string | null>(null);
   const gymName: string = (bizSettings as any)?.gymName || "Core X";
+  const mLabel = monthLabel(selectedMonth);
 
-  // Safe accessors
   const attendanceChart = attendanceReport?.chart || [];
   const fr = financialReport as any;
   const mr = memberReport as any;
 
-  // ── DOWNLOAD: Overview ─────────────────────────────────────────────
+  // billing filtered to selected month
+  const monthBilling = (billing || []).filter((inv: any) => {
+    const d = inv.dueDate || inv.paidDate || "";
+    return d.startsWith(selectedMonth);
+  });
+
+  // members joined in selected month
+  const monthMembers = (members || []).filter((m: any) => {
+    const joined = (m.createdAt || m.planStartDate || "").slice(0, 7);
+    return joined === selectedMonth;
+  });
+
+  // members expiring in selected month
+  const monthExpiring = (members || []).filter((m: any) => {
+    return (m.planExpiryDate || "").startsWith(selectedMonth);
+  }).sort((a: any, b: any) => a.planExpiryDate.localeCompare(b.planExpiryDate));
+
+  // ── DOWNLOAD: Overview ────────────────────────────────────────────────────
   const downloadOverview = () => {
     setDownloading("overview");
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
-    let y = addPdfHeader(doc, gymName, "Overview Summary Report", format(new Date(), "MMMM yyyy"));
+    let y = addPdfHeader(doc, gymName, "Overview Summary Report", mLabel);
 
     const bw = (pw - 28 - 9) / 4;
     statBox(doc, 14, y, bw, "Total Members", String(stats?.totalMembers || 0), "gray");
     statBox(doc, 14 + bw + 3, y, bw, "Active Members", String(stats?.activeMembers || 0), "green");
-    statBox(doc, 14 + (bw + 3) * 2, y, bw, "Monthly Revenue", `Rs ${(stats?.monthlyRevenue || 0).toLocaleString()}`, "green");
-    statBox(doc, 14 + (bw + 3) * 3, y, bw, "Today Attendance", String(stats?.todayAttendance || 0), "blue");
+    statBox(doc, 14 + (bw + 3) * 2, y, bw, `Revenue (${mLabel})`, `Rs ${(fr?.totalRevenue || 0).toLocaleString()}`, "green");
+    statBox(doc, 14 + (bw + 3) * 3, y, bw, "Net Profit", `Rs ${(fr?.netProfit || 0).toLocaleString()}`, "blue");
     y += 28;
-    statBox(doc, 14, y, bw, "Expired Members", String(stats?.expiredMembers || 0), "red");
-    statBox(doc, 14 + bw + 3, y, bw, "Unpaid Dues", `Rs ${(stats?.unpaidDues || 0).toLocaleString()}`, "red");
-    statBox(doc, 14 + (bw + 3) * 2, y, bw * 2 + 3, "Total Revenue (All Time)", `Rs ${(fr?.totalRevenue || 0).toLocaleString()}`, "green");
+    statBox(doc, 14, y, bw, "Membership Income", `Rs ${(fr?.membershipIncome || 0).toLocaleString()}`, "green");
+    statBox(doc, 14 + bw + 3, y, bw, "Sales Income", `Rs ${(fr?.salesIncome || 0).toLocaleString()}`, "green");
+    statBox(doc, 14 + (bw + 3) * 2, y, bw, "Expenses", `Rs ${(fr?.totalExpenses || 0).toLocaleString()}`, "red");
+    statBox(doc, 14 + (bw + 3) * 3, y, bw, "Unpaid Dues", `Rs ${(stats?.unpaidDues || 0).toLocaleString()}`, "red");
     y += 30;
 
-    if (revenueChart && revenueChart.length > 0) {
+    // Weekly breakdown for selected month
+    if (fr?.breakdown && fr.breakdown.length > 0) {
       doc.setFontSize(11); doc.setFont("helvetica", "bold");
-      doc.text("Revenue Trend (Last 6 Months)", 14, y); y += 4;
+      doc.text(`Weekly Breakdown — ${mLabel}`, 14, y); y += 4;
       autoTable(doc, {
         startY: y,
-        head: [["Month", "Revenue (Rs)", "Expenses (Rs)"]],
-        body: (revenueChart as any[]).map(r => [r.month, `Rs ${(r.revenue || 0).toLocaleString()}`, `Rs ${(r.expenses || 0).toLocaleString()}`]),
+        head: [["Week", "Revenue (Rs)", "Expenses (Rs)", "Net (Rs)"]],
+        body: (fr.breakdown as any[]).map((r: any) => [
+          r.month, `Rs ${(r.revenue || 0).toLocaleString()}`,
+          `Rs ${(r.expenses || 0).toLocaleString()}`,
+          `Rs ${((r.revenue || 0) - (r.expenses || 0)).toLocaleString()}`,
+        ]),
         headStyles: { fillColor: [227, 28, 37], textColor: 255 },
         alternateRowStyles: { fillColor: [255, 245, 245] },
         styles: { fontSize: 10 },
       });
-      y = (doc as any).lastAutoTable.finalY + 8;
+      y = (doc as any).lastAutoTable.finalY + 10;
     }
 
     if (attendanceChart.length > 0) {
       doc.setFontSize(11); doc.setFont("helvetica", "bold");
-      doc.text("Attendance — Last 7 Days", 14, y); y += 4;
+      doc.text(`Attendance — ${mLabel}`, 14, y); y += 4;
       autoTable(doc, {
         startY: y,
         head: [["Day", "Visits"]],
@@ -142,16 +176,16 @@ export default function Reports() {
     }
 
     addPdfFooter(doc, gymName);
-    doc.save(`${gymName.replace(/\s+/g,"_")}_Overview_${format(new Date(),"yyyy-MM-dd")}.pdf`);
+    doc.save(`${gymName.replace(/\s+/g, "_")}_Overview_${selectedMonth}.pdf`);
     setDownloading(null);
   };
 
-  // ── DOWNLOAD: Members ─────────────────────────────────────────────
+  // ── DOWNLOAD: Members ─────────────────────────────────────────────────────
   const downloadMembers = () => {
     setDownloading("members");
     const doc = new jsPDF({ orientation: "landscape" });
     const pw = doc.internal.pageSize.getWidth();
-    let y = addPdfHeader(doc, gymName, "Members Report — Full List", `Total: ${(members || []).length} members`);
+    let y = addPdfHeader(doc, gymName, `Members Report — ${mLabel}`, `Total: ${(members || []).length} members`);
 
     const bw = (pw - 28 - 12) / 5;
     const active = (members || []).filter((m: any) => m.status === "active").length;
@@ -159,10 +193,12 @@ export default function Reports() {
     statBox(doc, 14, y, bw, "Total Members", String((members || []).length), "gray");
     statBox(doc, 14 + (bw + 3), y, bw, "Active", String(active), "green");
     statBox(doc, 14 + (bw + 3) * 2, y, bw, "Expired", String(expired), "red");
-    statBox(doc, 14 + (bw + 3) * 3, y, bw, "New This Month", String(mr?.newThisMonth || 0), "blue");
-    statBox(doc, 14 + (bw + 3) * 4, y, bw, "Expiring This Week", String(mr?.expiringThisWeek || 0), "red");
+    statBox(doc, 14 + (bw + 3) * 3, y, bw, `Joined in ${mLabel}`, String(monthMembers.length), "blue");
+    statBox(doc, 14 + (bw + 3) * 4, y, bw, `Expiring in ${mLabel}`, String(monthExpiring.length), "red");
     y += 30;
 
+    doc.setFontSize(11); doc.setFont("helvetica", "bold");
+    doc.text("All Members", 14, y); y += 4;
     autoTable(doc, {
       startY: y,
       head: [["#", "Name", "Phone", "CNIC", "Plan", "Start Date", "Expiry Date", "Status", "Fitness Goal"]],
@@ -182,32 +218,50 @@ export default function Reports() {
       },
     });
 
+    if (monthMembers.length > 0) {
+      doc.addPage();
+      let y2 = addPdfHeader(doc, gymName, `New Members — ${mLabel}`, `${monthMembers.length} joined this month`);
+      autoTable(doc, {
+        startY: y2,
+        head: [["#", "Name", "Phone", "Plan", "Start Date", "Expiry Date", "Status"]],
+        body: monthMembers.map((m: any, i: number) => [
+          i + 1, m.name, m.phone,
+          (m.plan?.charAt(0).toUpperCase() + m.plan?.slice(1)) || "—",
+          m.planStartDate || "—", m.planExpiryDate || "—",
+          (m.status || "—").toUpperCase(),
+        ]),
+        headStyles: { fillColor: [227, 28, 37], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [253, 242, 242] },
+        styles: { fontSize: 9, cellPadding: 3 },
+      });
+    }
+
     addPdfFooter(doc, gymName);
-    doc.save(`${gymName.replace(/\s+/g,"_")}_Members_${format(new Date(),"yyyy-MM-dd")}.pdf`);
+    doc.save(`${gymName.replace(/\s+/g, "_")}_Members_${selectedMonth}.pdf`);
     setDownloading(null);
   };
 
-  // ── DOWNLOAD: Revenue ─────────────────────────────────────────────
+  // ── DOWNLOAD: Revenue ─────────────────────────────────────────────────────
   const downloadRevenue = () => {
     setDownloading("revenue");
     const doc = new jsPDF({ orientation: "landscape" });
     const pw = doc.internal.pageSize.getWidth();
-    let y = addPdfHeader(doc, gymName, "Revenue & Billing Report", format(new Date(), "MMMM yyyy"));
+    let y = addPdfHeader(doc, gymName, `Revenue & Billing Report — ${mLabel}`, mLabel);
 
     const bw = (pw - 28 - 9) / 4;
     statBox(doc, 14, y, bw, "Total Revenue", `Rs ${(fr?.totalRevenue || 0).toLocaleString()}`, "green");
-    statBox(doc, 14 + bw + 3, y, bw, "This Month Revenue", `Rs ${(stats?.monthlyRevenue || 0).toLocaleString()}`, "green");
+    statBox(doc, 14 + bw + 3, y, bw, "Membership Income", `Rs ${(fr?.membershipIncome || 0).toLocaleString()}`, "green");
     statBox(doc, 14 + (bw + 3) * 2, y, bw, "Net Profit", `Rs ${(fr?.netProfit || 0).toLocaleString()}`, "blue");
-    statBox(doc, 14 + (bw + 3) * 3, y, bw, "Unpaid Dues", `Rs ${(stats?.unpaidDues || 0).toLocaleString()}`, "red");
+    statBox(doc, 14 + (bw + 3) * 3, y, bw, "Total Expenses", `Rs ${(fr?.totalExpenses || 0).toLocaleString()}`, "red");
     y += 30;
 
-    if (revenueChart && revenueChart.length > 0) {
+    if (fr?.breakdown && fr.breakdown.length > 0) {
       doc.setFontSize(11); doc.setFont("helvetica", "bold");
-      doc.text("Monthly Revenue Breakdown", 14, y); y += 4;
+      doc.text(`Weekly Breakdown — ${mLabel}`, 14, y); y += 4;
       autoTable(doc, {
         startY: y,
-        head: [["Month", "Revenue (Rs)", "Expenses (Rs)", "Net (Rs)"]],
-        body: (revenueChart as any[]).map(r => [
+        head: [["Week", "Revenue (Rs)", "Expenses (Rs)", "Net (Rs)"]],
+        body: (fr.breakdown as any[]).map((r: any) => [
           r.month, `Rs ${(r.revenue || 0).toLocaleString()}`,
           `Rs ${(r.expenses || 0).toLocaleString()}`,
           `Rs ${((r.revenue || 0) - (r.expenses || 0)).toLocaleString()}`,
@@ -219,107 +273,116 @@ export default function Reports() {
     }
 
     doc.setFontSize(11); doc.setFont("helvetica", "bold");
-    doc.text("Invoice Log", 14, y); y += 4;
-    autoTable(doc, {
-      startY: y,
-      head: [["#", "Member Name", "Plan", "Amount (Rs)", "Due Date", "Paid Date", "Status", "Method"]],
-      body: (billing || []).slice(0, 300).map((inv: any, i: number) => [
-        i + 1, inv.memberName || "—",
-        (inv.plan?.charAt(0).toUpperCase() + inv.plan?.slice(1)) || "—",
-        `Rs ${parseInt(inv.amount || 0).toLocaleString()}`,
-        inv.dueDate || "—", inv.paidDate || "—",
-        (inv.status || "").toUpperCase(), inv.paymentMethod || "—",
-      ]),
-      headStyles: { fillColor: [227, 28, 37], textColor: 255, fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [253, 242, 242] },
-      styles: { fontSize: 8, cellPadding: 3 },
-      didParseCell: (data) => {
-        if (data.column.index === 6 && data.cell.raw === "PAID") { data.cell.styles.textColor = [34, 197, 94]; data.cell.styles.fontStyle = "bold"; }
-        if (data.column.index === 6 && data.cell.raw === "UNPAID") { data.cell.styles.textColor = [227, 28, 37]; }
-      },
-    });
+    doc.text(`Invoice Log — ${mLabel} (${monthBilling.length} invoices)`, 14, y); y += 4;
+    if (monthBilling.length === 0) {
+      doc.setFontSize(10); doc.setTextColor(150, 150, 150);
+      doc.text("No invoices found for this month.", 14, y + 6);
+      doc.setTextColor(0, 0, 0);
+    } else {
+      autoTable(doc, {
+        startY: y,
+        head: [["#", "Member Name", "Plan", "Amount (Rs)", "Due Date", "Paid Date", "Status", "Method"]],
+        body: monthBilling.map((inv: any, i: number) => [
+          i + 1, inv.memberName || "—",
+          (inv.plan?.charAt(0).toUpperCase() + inv.plan?.slice(1)) || "—",
+          `Rs ${parseInt(inv.amount || 0).toLocaleString()}`,
+          inv.dueDate || "—", inv.paidDate || "—",
+          (inv.status || "").toUpperCase(), inv.paymentMethod || "—",
+        ]),
+        headStyles: { fillColor: [227, 28, 37], textColor: 255, fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [253, 242, 242] },
+        styles: { fontSize: 8, cellPadding: 3 },
+        didParseCell: (data) => {
+          if (data.column.index === 6 && data.cell.raw === "PAID") { data.cell.styles.textColor = [34, 197, 94]; data.cell.styles.fontStyle = "bold"; }
+          if (data.column.index === 6 && data.cell.raw === "UNPAID") { data.cell.styles.textColor = [227, 28, 37]; }
+        },
+      });
+    }
 
     addPdfFooter(doc, gymName);
-    doc.save(`${gymName.replace(/\s+/g,"_")}_Revenue_${format(new Date(),"yyyy-MM-dd")}.pdf`);
+    doc.save(`${gymName.replace(/\s+/g, "_")}_Revenue_${selectedMonth}.pdf`);
     setDownloading(null);
   };
 
-  // ── DOWNLOAD: Attendance ─────────────────────────────────────────
+  // ── DOWNLOAD: Attendance ──────────────────────────────────────────────────
   const downloadAttendance = () => {
     setDownloading("attendance");
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
-    let y = addPdfHeader(doc, gymName, "Attendance Report", format(new Date(), "MMMM yyyy"));
+    let y = addPdfHeader(doc, gymName, `Attendance Report — ${mLabel}`, mLabel);
 
     const bw = (pw - 28 - 6) / 3;
-    statBox(doc, 14, y, bw, "Total Visits (7 days)", String(attendanceReport?.totalVisits || 0), "green");
+    statBox(doc, 14, y, bw, "Total Visits", String(attendanceReport?.totalVisits || 0), "green");
     statBox(doc, 14 + bw + 3, y, bw, "Avg Daily Visits", String(attendanceReport?.avgDailyVisits || 0), "blue");
-    statBox(doc, 14 + (bw + 3) * 2, y, bw, "Today's Visits", String(stats?.todayAttendance || 0), "gray");
+    statBox(doc, 14 + (bw + 3) * 2, y, bw, "Unique Members", String(attendanceReport?.uniqueMembers || 0), "gray");
     y += 30;
 
     if (attendanceReport?.peakDay) {
       doc.setFontSize(10); doc.setFont("helvetica", "normal");
       doc.setTextColor(80, 80, 80);
-      doc.text(`Peak Day: ${attendanceReport.peakDay}  |  Unique Members: ${attendanceReport.uniqueMembers || 0}`, 14, y);
+      doc.text(`Peak Day: ${attendanceReport.peakDay}  |  Month: ${mLabel}`, 14, y);
       doc.setTextColor(0, 0, 0);
       y += 8;
     }
 
-    autoTable(doc, {
-      startY: y,
-      head: [["Day", "Visits"]],
-      body: attendanceChart.map((r: any) => [r.day, r.count]),
-      headStyles: { fillColor: [227, 28, 37], textColor: 255 },
-      alternateRowStyles: { fillColor: [255, 245, 245] },
-      styles: { fontSize: 11, cellPadding: 4 },
-      columnStyles: { 1: { fontStyle: "bold", textColor: [227, 28, 37] } },
-    });
+    if (attendanceChart.length === 0) {
+      doc.setFontSize(10); doc.setTextColor(150, 150, 150);
+      doc.text("No attendance records found for this month.", 14, y + 6);
+      doc.setTextColor(0, 0, 0);
+    } else {
+      autoTable(doc, {
+        startY: y,
+        head: [["Date", "Visits"]],
+        body: attendanceChart.map((r: any) => [r.day, r.count]),
+        headStyles: { fillColor: [227, 28, 37], textColor: 255 },
+        alternateRowStyles: { fillColor: [255, 245, 245] },
+        styles: { fontSize: 11, cellPadding: 4 },
+        columnStyles: { 1: { fontStyle: "bold", textColor: [227, 28, 37] } },
+      });
+    }
 
     addPdfFooter(doc, gymName);
-    doc.save(`${gymName.replace(/\s+/g,"_")}_Attendance_${format(new Date(),"yyyy-MM-dd")}.pdf`);
+    doc.save(`${gymName.replace(/\s+/g, "_")}_Attendance_${selectedMonth}.pdf`);
     setDownloading(null);
   };
 
-  // ── DOWNLOAD: Expiring Members ──────────────────────────────────
+  // ── DOWNLOAD: Expiring Members ────────────────────────────────────────────
   const downloadExpiring = () => {
     setDownloading("expiring");
     const doc = new jsPDF();
     const pw = doc.internal.pageSize.getWidth();
-    let y = addPdfHeader(doc, gymName, "Expiring Members Report", "Next 30 Days");
-
-    const today = new Date();
-    const in30 = new Date(); in30.setDate(in30.getDate() + 30);
-    const expiring = (members || []).filter((m: any) => {
-      const exp = new Date(m.planExpiryDate);
-      return exp >= today && exp <= in30;
-    }).sort((a: any, b: any) => new Date(a.planExpiryDate).getTime() - new Date(b.planExpiryDate).getTime());
+    let y = addPdfHeader(doc, gymName, `Expiring Members — ${mLabel}`, `${monthExpiring.length} members expiring`);
 
     const bw = (pw - 28 - 3) / 2;
-    statBox(doc, 14, y, bw, "Expiring in 30 Days", String(expiring.length), "red");
-    statBox(doc, 14 + bw + 3, y, bw, "Potential Renewal Revenue", `Rs ${(expiring.length * 3000).toLocaleString()}+`, "green");
+    statBox(doc, 14, y, bw, `Expiring in ${mLabel}`, String(monthExpiring.length), "red");
+    statBox(doc, 14 + bw + 3, y, bw, "Potential Renewal Revenue", `Rs ${(monthExpiring.length * 3000).toLocaleString()}+`, "green");
     y += 30;
 
-    autoTable(doc, {
-      startY: y,
-      head: [["#", "Member Name", "Phone", "Plan", "Expiry Date", "Days Left"]],
-      body: expiring.map((m: any, i: number) => {
-        const daysLeft = Math.ceil((new Date(m.planExpiryDate).getTime() - today.getTime()) / 86400000);
-        return [i + 1, m.name, m.phone, m.plan?.charAt(0).toUpperCase() + m.plan?.slice(1), m.planExpiryDate, daysLeft <= 7 ? `⚠ ${daysLeft} days` : `${daysLeft} days`];
-      }),
-      headStyles: { fillColor: [227, 28, 37], textColor: 255 },
-      alternateRowStyles: { fillColor: [255, 245, 245] },
-      styles: { fontSize: 10 },
-      didParseCell: (data) => {
-        if (data.column.index === 5 && String(data.cell.raw).startsWith("⚠")) { data.cell.styles.textColor = [227, 28, 37]; data.cell.styles.fontStyle = "bold"; }
-      },
-    });
+    if (monthExpiring.length === 0) {
+      doc.setFontSize(10); doc.setTextColor(150, 150, 150);
+      doc.text(`No members expiring in ${mLabel}.`, 14, y + 6);
+      doc.setTextColor(0, 0, 0);
+    } else {
+      autoTable(doc, {
+        startY: y,
+        head: [["#", "Member Name", "Phone", "Plan", "Expiry Date"]],
+        body: monthExpiring.map((m: any, i: number) => [
+          i + 1, m.name, m.phone,
+          m.plan?.charAt(0).toUpperCase() + m.plan?.slice(1),
+          m.planExpiryDate,
+        ]),
+        headStyles: { fillColor: [227, 28, 37], textColor: 255 },
+        alternateRowStyles: { fillColor: [255, 245, 245] },
+        styles: { fontSize: 10 },
+      });
+    }
 
     addPdfFooter(doc, gymName);
-    doc.save(`${gymName.replace(/\s+/g,"_")}_Expiring_${format(new Date(),"yyyy-MM-dd")}.pdf`);
+    doc.save(`${gymName.replace(/\s+/g, "_")}_Expiring_${selectedMonth}.pdf`);
     setDownloading(null);
   };
 
-  // ── Chart data ────────────────────────────────────────────────────
+  // ── Chart data ─────────────────────────────────────────────────────────────
   const membershipBreakdown = (mr?.byPlan || []).length > 0
     ? mr.byPlan
     : ["monthly", "quarterly", "yearly", "weekly", "daily"].map(plan => ({
@@ -341,59 +404,100 @@ export default function Reports() {
     </Button>
   );
 
+  // month nav helpers
+  const prevMonth = () => setSelectedMonth(toMonthStr(subMonths(parse(selectedMonth + "-01", "yyyy-MM-dd", new Date()), 1)));
+  const nextMonth = () => {
+    const next = addMonths(parse(selectedMonth + "-01", "yyyy-MM-dd", new Date()), 1);
+    if (next <= new Date()) setSelectedMonth(toMonthStr(next));
+  };
+  const isCurrentMonth = selectedMonth === toMonthStr(new Date());
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-          <p className="text-muted-foreground text-sm mt-1">View analytics and download professional PDF reports</p>
+          <p className="text-muted-foreground text-sm mt-1">Monthly analytics and PDF reports for {mLabel}</p>
         </div>
-        <DownloadBtn label="Download Overview PDF" onClick={downloadOverview} id="overview" />
+
+        {/* Month Selector */}
+        <div className="flex items-center gap-2 bg-muted/40 border rounded-lg px-3 py-2 w-fit">
+          <CalendarCheck className="h-4 w-4 text-muted-foreground" />
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={prevMonth}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <input
+            type="month"
+            value={selectedMonth}
+            max={toMonthStr(new Date())}
+            onChange={e => e.target.value && setSelectedMonth(e.target.value)}
+            className="bg-transparent text-sm font-semibold outline-none cursor-pointer w-32 text-center"
+          />
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={nextMonth} disabled={isCurrentMonth}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* ── KPI Cards ── */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Members</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{stats?.totalMembers || 0}</div><p className="text-xs text-muted-foreground">+{mr?.newThisMonth || 0} this month</p></CardContent>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats?.totalMembers || 0}</div>
+            <p className="text-xs text-muted-foreground">+{monthMembers.length} joined in {mLabel}</p>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Members</CardTitle>
-            <Users className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium">Revenue ({mLabel})</CardTitle>
+            <DollarSign className="h-4 w-4 text-green-500" />
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold text-green-600">{stats?.activeMembers || 0}</div><p className="text-xs text-muted-foreground">{mr?.renewalsThisMonth || 0} renewals this month</p></CardContent>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">Rs {(fr?.totalRevenue || 0).toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Net: Rs {(fr?.netProfit || 0).toLocaleString()}</p>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">Rs {(stats?.monthlyRevenue || 0).toLocaleString()}</div><p className="text-xs text-muted-foreground">All time: Rs {(fr?.totalRevenue || 0).toLocaleString()}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Attendance</CardTitle>
+            <CardTitle className="text-sm font-medium">Attendance ({mLabel})</CardTitle>
             <CalendarCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{stats?.todayAttendance || 0}</div><p className="text-xs text-muted-foreground">Avg {attendanceReport?.avgDailyVisits || 0}/day this week</p></CardContent>
+          <CardContent>
+            <div className="text-2xl font-bold">{attendanceReport?.totalVisits || 0}</div>
+            <p className="text-xs text-muted-foreground">Avg {attendanceReport?.avgDailyVisits || 0}/day · {attendanceReport?.uniqueMembers || 0} unique</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expiring ({mLabel})</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{monthExpiring.length}</div>
+            <p className="text-xs text-muted-foreground">memberships expire this month</p>
+          </CardContent>
         </Card>
       </div>
 
-      {/* Tabs */}
+      {/* ── Tabs ── */}
       <Tabs defaultValue="overview">
         <TabsList>
-          <TabsTrigger value="overview"><TrendingUp className="h-4 w-4 mr-1.5"/>Overview</TabsTrigger>
-          <TabsTrigger value="members"><Users className="h-4 w-4 mr-1.5"/>Members</TabsTrigger>
-          <TabsTrigger value="revenue"><CreditCard className="h-4 w-4 mr-1.5"/>Revenue</TabsTrigger>
-          <TabsTrigger value="attendance"><Activity className="h-4 w-4 mr-1.5"/>Attendance</TabsTrigger>
+          <TabsTrigger value="overview"><TrendingUp className="h-4 w-4 mr-1.5" />Overview</TabsTrigger>
+          <TabsTrigger value="members"><Users className="h-4 w-4 mr-1.5" />Members</TabsTrigger>
+          <TabsTrigger value="revenue"><CreditCard className="h-4 w-4 mr-1.5" />Revenue</TabsTrigger>
+          <TabsTrigger value="attendance"><Activity className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
         </TabsList>
 
-        {/* ── OVERVIEW ───────────────────────────────────────────── */}
+        {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
         <TabsContent value="overview" className="mt-4 space-y-4">
+          <div className="flex justify-end">
+            <DownloadBtn label="Download Overview PDF" onClick={downloadOverview} id="overview" />
+          </div>
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base">Revenue Trend (6 Months)</CardTitle></CardHeader>
@@ -426,45 +530,44 @@ export default function Reports() {
           </div>
           <Card>
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2"><FileBarChart className="h-5 w-5"/>Financial Summary</CardTitle>
-              </div>
+              <CardTitle className="flex items-center gap-2"><FileBarChart className="h-5 w-5" />Financial Summary — {mLabel}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-4">
                 <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Monthly Revenue</p>
-                  <p className="text-xl font-bold text-green-600">Rs {(stats?.monthlyRevenue || 0).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mb-1">Total Revenue</p>
+                  <p className="text-xl font-bold text-green-600">Rs {(fr?.totalRevenue || 0).toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-xs text-muted-foreground mb-1">Membership Income</p>
+                  <p className="text-xl font-bold">Rs {(fr?.membershipIncome || 0).toLocaleString()}</p>
                 </div>
                 <div className="rounded-lg border p-4">
                   <p className="text-xs text-muted-foreground mb-1">Net Profit</p>
                   <p className="text-xl font-bold text-blue-600">Rs {(fr?.netProfit || 0).toLocaleString()}</p>
                 </div>
                 <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Unpaid Dues</p>
-                  <p className="text-xl font-bold text-destructive">Rs {(stats?.unpaidDues || 0).toLocaleString()}</p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Expired Members</p>
-                  <p className="text-xl font-bold">{stats?.expiredMembers || 0}</p>
+                  <p className="text-xs text-muted-foreground mb-1">Total Expenses</p>
+                  <p className="text-xl font-bold text-destructive">Rs {(fr?.totalExpenses || 0).toLocaleString()}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* ── MEMBERS ─────────────────────────────────────────────── */}
+        {/* ── MEMBERS ───────────────────────────────────────────────────────── */}
         <TabsContent value="members" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Badge variant="outline">{(members || []).length} Total</Badge>
               <Badge className="bg-green-100 text-green-800 hover:bg-green-100">{stats?.activeMembers || 0} Active</Badge>
               <Badge variant="destructive">{stats?.expiredMembers || 0} Expired</Badge>
-              {(mr?.expiringThisWeek || 0) > 0 && <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">{mr.expiringThisWeek} Expiring This Week</Badge>}
+              <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">{monthMembers.length} Joined in {mLabel}</Badge>
+              {monthExpiring.length > 0 && <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">{monthExpiring.length} Expiring in {mLabel}</Badge>}
             </div>
             <div className="flex gap-2">
-              <DownloadBtn label="Download Members PDF" onClick={downloadMembers} id="members" />
-              <DownloadBtn label="Download Expiring PDF" onClick={downloadExpiring} id="expiring" />
+              <DownloadBtn label="Members PDF" onClick={downloadMembers} id="members" />
+              <DownloadBtn label="Expiring PDF" onClick={downloadExpiring} id="expiring" />
             </div>
           </div>
           <div className="grid gap-6 md:grid-cols-2">
@@ -499,38 +602,36 @@ export default function Reports() {
             </Card>
           </div>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Members Expiring in 30 Days</CardTitle></CardHeader>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Expiring in {mLabel}</CardTitle>
+                <Badge variant={monthExpiring.length > 0 ? "destructive" : "outline"}>{monthExpiring.length} members</Badge>
+              </div>
+            </CardHeader>
             <CardContent>
-              {(() => {
-                const today = new Date();
-                const in30 = new Date(); in30.setDate(in30.getDate() + 30);
-                const expiring = (members || []).filter((m: any) => {
-                  const exp = new Date(m.planExpiryDate);
-                  return exp >= today && exp <= in30;
-                });
-                if (expiring.length === 0) return <p className="text-muted-foreground text-sm py-4 text-center">No members expiring in the next 30 days</p>;
-                return (
+              {monthExpiring.length === 0
+                ? <p className="text-muted-foreground text-sm py-4 text-center">No members expiring in {mLabel}</p>
+                : (
                   <div className="divide-y">
-                    {expiring.slice(0, 10).map((m: any) => {
-                      const days = Math.ceil((new Date(m.planExpiryDate).getTime() - today.getTime()) / 86400000);
-                      return (
-                        <div key={m.id} className="flex items-center justify-between py-2 text-sm">
-                          <div><span className="font-medium">{m.name}</span><span className="text-muted-foreground ml-2">{m.phone}</span></div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground">{m.planExpiryDate}</span>
-                            <Badge variant={days <= 7 ? "destructive" : "secondary"}>{days}d left</Badge>
-                          </div>
+                    {monthExpiring.slice(0, 15).map((m: any) => (
+                      <div key={m.id} className="flex items-center justify-between py-2 text-sm">
+                        <div>
+                          <span className="font-medium">{m.name}</span>
+                          <span className="text-muted-foreground ml-2">{m.phone}</span>
                         </div>
-                      );
-                    })}
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">{m.planExpiryDate}</span>
+                          <Badge variant="destructive" className="text-xs capitalize">{m.plan}</Badge>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                );
-              })()}
+                )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* ── REVENUE ──────────────────────────────────────────────── */}
+        {/* ── REVENUE ──────────────────────────────────────────────────────── */}
         <TabsContent value="revenue" className="mt-4 space-y-4">
           <div className="flex justify-end">
             <DownloadBtn label="Download Revenue PDF" onClick={downloadRevenue} id="revenue" />
@@ -539,10 +640,10 @@ export default function Reports() {
             <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground mb-1">Total Revenue</p><p className="text-2xl font-bold text-green-600">Rs {(fr?.totalRevenue || 0).toLocaleString()}</p></CardContent></Card>
             <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground mb-1">Membership Income</p><p className="text-2xl font-bold">Rs {(fr?.membershipIncome || 0).toLocaleString()}</p></CardContent></Card>
             <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground mb-1">Net Profit</p><p className="text-2xl font-bold text-blue-600">Rs {(fr?.netProfit || 0).toLocaleString()}</p></CardContent></Card>
-            <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground mb-1">Unpaid Dues</p><p className="text-2xl font-bold text-destructive">Rs {(stats?.unpaidDues || 0).toLocaleString()}</p></CardContent></Card>
+            <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground mb-1">Expenses</p><p className="text-2xl font-bold text-destructive">Rs {(fr?.totalExpenses || 0).toLocaleString()}</p></CardContent></Card>
           </div>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Revenue by Month</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Revenue Trend (6 Months)</CardTitle></CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={revenueChart || []}>
@@ -558,49 +659,57 @@ export default function Reports() {
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Recent Invoices</CardTitle>
-                <Badge variant="outline">{(billing || []).length} total</Badge>
+                <CardTitle className="text-base">Invoices — {mLabel}</CardTitle>
+                <Badge variant="outline">{monthBilling.length} invoices</Badge>
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y max-h-72 overflow-y-auto">
-                {(billing || []).slice(0, 20).map((inv: any) => (
-                  <div key={inv.id} className="flex items-center justify-between px-4 py-2 text-sm">
-                    <div><span className="font-medium">{inv.memberName || "—"}</span><span className="text-muted-foreground ml-2 capitalize">{inv.plan}</span></div>
-                    <div className="flex items-center gap-2">
-                      <span>Rs {parseInt(inv.amount || 0).toLocaleString()}</span>
-                      <Badge variant={inv.status === "paid" ? "default" : "destructive"} className="text-xs">{inv.status}</Badge>
-                    </div>
+              {monthBilling.length === 0
+                ? <p className="text-center text-sm text-muted-foreground py-6">No invoices found for {mLabel}</p>
+                : (
+                  <div className="divide-y max-h-72 overflow-y-auto">
+                    {monthBilling.slice(0, 30).map((inv: any) => (
+                      <div key={inv.id} className="flex items-center justify-between px-4 py-2 text-sm">
+                        <div><span className="font-medium">{inv.memberName || "—"}</span><span className="text-muted-foreground ml-2 capitalize">{inv.plan}</span></div>
+                        <div className="flex items-center gap-2">
+                          <span>Rs {parseInt(inv.amount || 0).toLocaleString()}</span>
+                          <Badge variant={inv.status === "paid" ? "default" : "destructive"} className="text-xs">{inv.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* ── ATTENDANCE ───────────────────────────────────────────── */}
+        {/* ── ATTENDANCE ───────────────────────────────────────────────────── */}
         <TabsContent value="attendance" className="mt-4 space-y-4">
           <div className="flex justify-end">
             <DownloadBtn label="Download Attendance PDF" onClick={downloadAttendance} id="attendance" />
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card><CardContent className="pt-5 text-center"><div className="text-2xl font-bold text-primary">{stats?.todayAttendance || 0}</div><div className="text-sm text-muted-foreground">Today</div></CardContent></Card>
-            <Card><CardContent className="pt-5 text-center"><div className="text-2xl font-bold">{attendanceReport?.totalVisits || 0}</div><div className="text-sm text-muted-foreground">Last 7 Days</div></CardContent></Card>
+            <Card><CardContent className="pt-5 text-center"><div className="text-2xl font-bold">{attendanceReport?.totalVisits || 0}</div><div className="text-sm text-muted-foreground">Total in {mLabel}</div></CardContent></Card>
             <Card><CardContent className="pt-5 text-center"><div className="text-2xl font-bold">{attendanceReport?.avgDailyVisits || 0}</div><div className="text-sm text-muted-foreground">Daily Average</div></CardContent></Card>
             <Card><CardContent className="pt-5 text-center"><div className="text-sm font-medium">{attendanceReport?.peakDay || "—"}</div><div className="text-sm text-muted-foreground">Peak Day</div></CardContent></Card>
           </div>
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base">Daily Attendance — Last 7 Days</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Daily Attendance — {mLabel}</CardTitle></CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={attendanceChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="count" fill={PRIMARY} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {attendanceChart.length === 0
+                ? <p className="text-center text-sm text-muted-foreground py-8">No attendance records for {mLabel}</p>
+                : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={attendanceChart}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip />
+                      <Bar dataKey="count" fill={PRIMARY} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
             </CardContent>
           </Card>
         </TabsContent>
