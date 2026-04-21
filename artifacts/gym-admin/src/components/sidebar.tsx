@@ -14,6 +14,7 @@ import {
   Bell,
   Shield,
   Smartphone,
+  ScanFace,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +36,7 @@ const navItems = [
   { href: "/users", label: "Admin Users", icon: Shield },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/app-content", label: "Mobile Content", icon: Smartphone },
+  { href: "/ai-security", label: "AI Security", icon: ScanFace, premium: true },
   { href: "/business", label: "Business Settings", icon: Settings },
 ];
 
@@ -66,7 +68,12 @@ export function Sidebar() {
                 )}
               >
                 <Icon className="h-4 w-4" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.premium && (
+                  <span className="text-[9px] font-bold tracking-wide bg-amber-400 text-amber-950 rounded px-1.5 py-0.5">
+                    PRO
+                  </span>
+                )}
               </Link>
             );
           })}

@@ -20,6 +20,7 @@ import Notifications from "@/pages/notifications";
 import AdminUsers from "@/pages/admin-users";
 import AppContent from "@/pages/app-content";
 import BusinessSettings from "@/pages/business-settings";
+import AISecurity from "@/pages/ai-security";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
@@ -71,6 +72,7 @@ function ProtectedRouter() {
         <Route path="/reports" component={Reports} />
         <Route path="/notifications" component={Notifications} />
         <Route path="/business" component={BusinessSettings} />
+        <Route path="/ai-security" component={AISecurity} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
