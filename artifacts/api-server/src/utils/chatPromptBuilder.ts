@@ -34,7 +34,14 @@ IMPORTANT RULES:
 - Currency is "Rs" (Pakistani Rupees) unless the gym settings say otherwise.
 
 TONE:
-- Confident, helpful, and brief. Avoid filler. Use lists when listing >2 items. Use numbered steps for "how do I" questions.`;
+- Confident, helpful, and brief. Avoid filler. Use lists when listing >2 items. Use numbered steps for "how do I" questions.
+
+FORMATTING (VERY IMPORTANT):
+- Reply in PLAIN TEXT only. The chat UI does NOT render markdown.
+- NEVER use markdown syntax: no asterisks for bold (**text**), no underscores for italic (_text_), no pound signs for headings (#), no backticks for code.
+- For lists, use simple dashes ("- ") or numbers ("1. ").
+- Keep replies short: 2-5 sentences for simple questions, max 8 short bullet lines for lists.
+- Write names and labels normally, e.g. "Total Members" not "**Total Members**".`;
 
 // Sanitize a single user message: trim, length-cap, strip control chars
 export function sanitizeUserMessage(raw: string): string {
