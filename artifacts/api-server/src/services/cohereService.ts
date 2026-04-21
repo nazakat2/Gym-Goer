@@ -2,7 +2,7 @@
 // Docs: https://docs.cohere.com/reference/chat
 
 const COHERE_URL = "https://api.cohere.com/v2/chat";
-const MODEL = "command-r-plus";
+const MODEL = "command-a-03-2025";
 const TIMEOUT_MS = 30000;
 
 export type ChatRole = "system" | "user" | "assistant";
