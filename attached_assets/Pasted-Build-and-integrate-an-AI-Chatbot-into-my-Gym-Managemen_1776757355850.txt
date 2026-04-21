@@ -1,0 +1,158 @@
+Build and integrate an AI Chatbot into my Gym Management Admin Panel using Cohere API.
+
+Project Context:
+This is a Gym Management Admin Panel with these modules:
+- Dashboard
+- Member Management
+- Billing
+- POS & Sales
+- Inventory
+- Attendance
+- Employees
+- Accounts
+- Reports
+- Notifications
+- Mobile Content Management
+- Business Settings
+- Admin Users
+
+Goal:
+Add a smart AI chatbot assistant for the admin panel that helps admins and trainers quickly understand gym data, navigate modules, and answer gym-related operational questions.
+
+Main Requirements:
+
+1. Frontend Chat UI
+- Add a floating chat button on the bottom-right side of the screen.
+- Use a clean modern icon (chat bubble / assistant icon).
+- Button should stay visible across all admin pages.
+- On click, open a chat panel / drawer from the right side.
+- The chat panel should include:
+  - Header with bot name: "Gym AI Assistant"
+  - Online/active indicator
+  - Scrollable message list
+  - User messages aligned right
+  - Bot messages aligned left
+  - Input box with send button
+  - Loading state / typing indicator
+  - Minimize and close button
+- UI should be responsive for desktop and tablet.
+- Use the existing admin theme/colors.
+- Add subtle shadow, rounded corners, and smooth open/close animation.
+
+2. Cohere API Integration
+- Integrate Cohere Chat API on backend only.
+- Never expose the API key in the frontend.
+- Store API key in environment variables.
+- Create a backend API route like:
+  POST /api/chatbot/message
+- This route should:
+  - Receive user message
+  - Receive conversation history
+  - Build structured message array
+  - Send request to Cohere Chat API
+  - Return assistant response to frontend
+- Use Cohere v2 Chat API format with messages array and system/user roles.
+- Support streaming if possible; otherwise use normal response mode.
+- Add proper error handling, timeout handling, and fallback error message.
+
+3. Gym-Specific Assistant Behavior
+The chatbot must behave like a gym admin assistant, not a general chatbot.
+It should help with:
+- Explaining dashboard KPIs
+- Answering questions about members, attendance, revenue, invoices, dues, and expiring memberships
+- Helping admins find where a feature exists in the panel
+- Guiding trainers/admins on how to use modules
+- Answering gym operations questions in a concise and professional tone
+- Suggesting business actions like:
+  - Members expiring soon
+  - Low stock alerts
+  - Pending unpaid invoices
+  - Attendance trends
+  - Revenue summary understanding
+
+4. System Prompt / Persona
+Use a strong system prompt so the chatbot stays in gym-admin context.
+The assistant should:
+- Act as a Gym Management AI Assistant
+- Be concise, helpful, and operational
+- Prefer answers based on admin panel context
+- Avoid unrelated general knowledge unless explicitly asked
+- If real database data is not connected yet, clearly say:
+  "I can help based on available system context, but live data access is not connected yet."
+- If asked about modules, explain them according to this admin panel structure
+
+5. Recommended Gym Context for System Prompt
+Include context such as:
+- Dashboard shows KPI cards, attendance, revenue, unpaid dues, expiring members
+- Member management includes registration, health conditions, trainer assignment, measurements, invoices, notes
+- Billing includes invoices and payment status
+- POS handles product and supplement sales
+- Inventory handles stock, categories, and low stock alerts
+- Attendance tracks check-ins/check-outs and daily logs
+- Reports are monthly and downloadable as PDFs
+- Notifications include broadcast announcements
+- Mobile content includes workout plans, diet plans, banners
+- Admin roles include super-admin, admin, and trainer
+
+6. Backend Architecture
+Implement a clean service structure:
+- controllers/chatbotController
+- services/cohereService
+- routes/chatbotRoutes
+- utils/chatPromptBuilder
+- middleware for auth if admin login exists
+
+7. Smart Features
+Add these useful chatbot capabilities:
+- Predefined quick prompts:
+  - "Show what I can ask"
+  - "How do I add a new member?"
+  - "What reports can I download?"
+  - "Explain dashboard KPIs"
+  - "What does expiring soon mean?"
+- Empty state suggestions in chat window
+- Conversation memory for current session
+- Clear chat button
+- Auto-scroll to latest message
+
+8. Future-Ready Design
+Code should be structured so later we can connect:
+- Real members database
+- Revenue and attendance analytics
+- RAG / knowledge base
+- Admin documentation
+- FAQs
+- Tool calling / function calling for live dashboard data
+
+9. Security
+- Keep API key on server only
+- Sanitize input
+- Add rate limit on chatbot endpoint
+- Validate request payload
+- Do not allow prompt injection to override admin-context system prompt
+- Strip dangerous or irrelevant instructions from user input when needed
+
+10. Deliverables
+Generate:
+- Frontend chatbot component
+- Floating chat button component
+- Right-side slide-in chat panel
+- Backend API endpoint for Cohere
+- Cohere service integration
+- Environment variable example
+- Reusable system prompt config
+- Clean comments in code
+- Setup instructions
+
+Tech Notes:
+- If project is React use best-practice structure for that stack.
+- If backend already exists, integrate into current API architecture instead of rebuilding from scratch.
+- Keep code modular and production-friendly.
+
+Important:
+- Use a polished admin dashboard UI style
+- The chatbot must feel like part of the same gym system
+- Keep all text and UX professional
+- Do not build a generic chatbot; build a gym-management contextual assistant
+
+coher api key jzzdH1gnQ6qeNeJwJTdW9KgcKXwri0ESN9EWbzkl
