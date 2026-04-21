@@ -1,5 +1,6 @@
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { ChatbotWidget } from "./chatbot";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -11,6 +12,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <ChatbotWidget />
     </div>
   );
 }
